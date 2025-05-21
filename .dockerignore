@@ -1,0 +1,46 @@
+# Исключаем временные и кэш-файлы Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+*.pyo
+*.pyd
+*.pycache__
+
+# Исключаем дампы и логи
+logs/
+dumps/
+
+# Исключаем тесты
+/tests/
+
+# Исключаем IDE и редакторные файлы
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Исключаем файлы и каталоги git
+.git/
+.gitignore
+
+# Исключаем Docker-артефакты
+*.tar
+*.img
+*.bak
+
+# Исключаем файлы ОС
+.DS_Store
+Thumbs.db
+
+# Исключаем файлы окружения
+.env
+.env.*
+venv/
+
+# Исключаем файлы документации
+*.md
+README.md 

@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  scraper:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - DISPLAY=:99
+      - PYTHONPATH=/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./dumps:/app/dumps
+      - ./logs:/app/logs
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    working_dir: /app
+    shm_size: '2gb'  # Увеличиваем размер shared memory для стабильной работы браузера
+    cap_add:
+      - SYS_ADMIN  # Необходимо для работы Chrome в Docker
+    security_opt:
+      - seccomp=unconfined  # Для стабильной работы браузера
+    user: pwuser  # Явно указываем пользователя
+
+volumes:
+  pgdata:
+  redisdata: 

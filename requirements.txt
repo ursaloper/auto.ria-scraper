@@ -1,0 +1,16 @@
+# Основные зависимости
+playwright>=1.51.0
+beautifulsoup4
+fake-useragent
+psycopg2-binary
+SQLAlchemy
+python-dotenv
+celery
+redis
+
+# Для тестирования
+pytest==7.4.3
+
+# Утилиты
+requests==2.31.0
+lxml==4.9.3 
