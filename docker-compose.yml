@@ -28,7 +28,6 @@ services:
 
   scraper:
     build: .
-    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -45,13 +44,55 @@ services:
       - ./logs:/app/logs
       - /tmp/.X11-unix:/tmp/.X11-unix
     working_dir: /app
-    shm_size: '2gb'  # Увеличиваем размер shared memory для стабильной работы браузера
+    shm_size: '2gb'
     cap_add:
-      - SYS_ADMIN  # Необходимо для работы Chrome в Docker
+      - SYS_ADMIN
     security_opt:
-      - seccomp=unconfined  # Для стабильной работы браузера
-    user: pwuser  # Явно указываем пользователя
+      - seccomp=unconfined
+
+  celery_worker:
+    build: .
+    restart: unless-stopped
+    command: celery -A app.config.celery_config worker --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - DISPLAY=:99
+      - PYTHONPATH=/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./dumps:/app/dumps
+      - ./logs:/app/logs
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    working_dir: /app
+    shm_size: '2gb'
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp=unconfined
+
+  celery_beat:
+    build: .
+    restart: unless-stopped
+    command: celery -A app.config.celery_config beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    depends_on:
+      - redis
+      - celery_worker
+    volumes:
+      - ./logs:/app/logs
+    working_dir: /app
 
 volumes:
   pgdata:
-  redisdata: 
+  redisdata:
+  dumps_data:
+  logs_data: 

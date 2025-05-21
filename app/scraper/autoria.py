@@ -144,9 +144,10 @@ class AutoRiaScraper:
                 return self._process_car_page(car_url, attempt + 1)
             return None
 
-    def run(self) -> None:
+    def run(self) -> Dict[str, int]:
         """
         Запускает процесс скрапинга.
+        Возвращает статистику обработки.
         """
         logger.info(f"Запуск скрапера AutoRia. URL: {self.start_url}")
 
@@ -159,7 +160,10 @@ class AutoRiaScraper:
 
             if not car_links:
                 logger.warning("Не найдено ссылок на автомобили")
-                return
+                return {
+                    "processed": 0,
+                    "saved": 0
+                }
 
             logger.info(f"Собрано {len(car_links)} ссылок")
 
@@ -188,10 +192,19 @@ class AutoRiaScraper:
                 f"Скрапинг завершен. Обработано: {processed_count}, сохранено: {saved_count}"
             )
 
+            return {
+                "processed": processed_count,
+                "saved": saved_count
+            }
+
         except Exception as e:
             logger.critical(
                 f"Критическая ошибка в процессе скрапинга: {str(e)}", exc_info=True
             )
+            return {
+                "processed": 0,
+                "saved": 0
+            }
         finally:
             # Гарантируем закрытие браузеров
             try:

@@ -12,45 +12,38 @@ ENV PYTHONUNBUFFERED=1 \
     # Добавляем путь к приложению в PYTHONPATH
     PYTHONPATH=/app
 
-# Создание непривилегированного пользователя
-RUN groupadd -r pwuser && useradd -r -g pwuser -G audio,video pwuser \
-    && mkdir -p /home/pwuser/Downloads \
-    && chown -R pwuser:pwuser /home/pwuser
-
 # Установка необходимых пакетов для Playwright
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
-    gnupg \
-    curl \
-    git \
-    libglib2.0-0 \
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
     libatk-bridge2.0-0 \
+    libatk1.0-0 \
     libcups2 \
-    libdrm2 \
     libdbus-1-3 \
-    libxcb1 \
-    libxkbcommon0 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
     libx11-6 \
     libxcomposite1 \
     libxdamage1 \
     libxext6 \
     libxfixes3 \
     libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    fonts-liberation \
+    libxshmfence1 \
+    libxkbcommon0 \
+    libxrender1 \
+    libx11-xcb1 \
     xvfb \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Создаём каталоги для хранения данных и временных файлов
 RUN mkdir -p /app/dumps /app/logs /tmp/.X11-unix && \
-    chown -R pwuser:pwuser /app /tmp/.X11-unix && \
     chmod 1777 /tmp/.X11-unix
 
 WORKDIR /app
@@ -61,16 +54,10 @@ COPY requirements.txt .
 # Установка Python зависимостей и Playwright
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt && \
-    playwright install --with-deps chromium && \
-    chown -R pwuser:pwuser /ms-playwright
+    playwright install --with-deps chromium
 
 # Копируем код приложения
 COPY . .
-RUN chown -R pwuser:pwuser /app && \
-    chmod -R 755 /app/logs
 
-# Переключение на непривилегированного пользователя
-USER pwuser
-
-# Запуск через entrypoint скрипт
+# Запуск
 CMD ["python", "-m", "app.main"] 

@@ -5,12 +5,9 @@
 import sys
 import signal
 from typing import Any, NoReturn
-import time
 
 from app.core.database import init_db
-from app.scraper.autoria import AutoRiaScraper
 from app.utils.logger import get_logger
-from app.config.settings import SCRAPER_START_URL
 
 logger = get_logger(__name__)
 
@@ -40,24 +37,11 @@ def main() -> None:
         logger.info("Инициализация базы данных...")
         init_db()
 
-        # Создаем и запускаем скрапер
-        logger.info("Запуск скрапера...")
-        scraper = AutoRiaScraper(
-            start_url=SCRAPER_START_URL,
-            headless=True,  # В Docker всегда используем headless режим
-        )
-
-        while True:
-            try:
-                scraper.run()
-                logger.info(
-                    "Цикл сбора данных завершен. Ожидание 1 час перед следующим запуском..."
-                )
-                time.sleep(3600)  # Пауза 1 час между циклами
-            except Exception as e:
-                logger.error(f"Ошибка в цикле сбора данных: {str(e)}", exc_info=True)
-                logger.info("Ожидание 5 минут перед повторной попыткой...")
-                time.sleep(300)  # Пауза 5 минут при ошибке
+        # В режиме Docker-контейнера скрапер запускается через Celery
+        # Эта функция используется в основном для тестирования или ручного запуска
+        logger.info("Приложение готово к работе. Для запуска скрапинга используйте Celery-задачи")
+        logger.info("Для ручного запуска скрапинга используйте: celery -A app call app.tasks.scraping.manual_scrape")
+        logger.info("Для ручного создания дампа используйте: celery -A app call app.tasks.backup.manual_backup")
 
     except Exception as e:
         logger.critical(f"Критическая ошибка: {str(e)}", exc_info=True)
