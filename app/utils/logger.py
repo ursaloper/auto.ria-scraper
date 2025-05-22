@@ -64,6 +64,7 @@ def get_logger(name: str) -> logging.Logger:
         >>>     logger.error("Произошла ошибка", exc_info=True)
     """
     logger = logging.getLogger(name)
+    logger.propagate = False
 
     # Если логгер уже настроен, возвращаем его
     if logger.handlers:
