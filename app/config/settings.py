@@ -1,9 +1,45 @@
 """
 Основные настройки приложения.
+
+Этот модуль содержит все основные параметры конфигурации для скрапера AutoRia.
+Настройки загружаются из переменных окружения с использованием python-dotenv,
+с определенными значениями по умолчанию в случае отсутствия переменных.
+
+Attributes:
+    BASE_DIR (Path): Базовая директория приложения.
+    DUMPS_DIR (Path): Директория для хранения дампов базы данных.
+    LOGS_DIR (Path): Директория для хранения логов приложения.
+
+    POSTGRES_DB (str): Имя базы данных PostgreSQL.
+    POSTGRES_USER (str): Имя пользователя PostgreSQL.
+    POSTGRES_PASSWORD (str): Пароль пользователя PostgreSQL.
+    POSTGRES_HOST (str): Хост PostgreSQL.
+    POSTGRES_PORT (str): Порт PostgreSQL.
+    DATABASE_URL (str): Полный URL для подключения к базе данных.
+
+    REDIS_HOST (str): Хост Redis.
+    REDIS_PORT (str): Порт Redis.
+    REDIS_URL (str): Полный URL для подключения к Redis.
+
+    CELERY_BROKER_URL (str): URL брокера сообщений для Celery.
+    CELERY_RESULT_BACKEND (str): URL бэкенда результатов для Celery.
+
+    SCRAPER_START_URL (str): Начальный URL для скрапинга.
+    SCRAPER_START_TIME (str): Время начала ежедневного скрапинга в формате "ЧЧ:ММ".
+    DUMP_TIME (str): Время создания дампа базы данных в формате "ЧЧ:ММ".
+    SCRAPER_CONCURRENCY (int): Количество одновременных запросов скрапера.
+    MAX_PAGES_TO_PARSE (int): Максимальное количество страниц для парсинга (0 - без ограничений).
+    MAX_CARS_TO_PROCESS (int): Максимальное количество автомобилей для обработки (0 - без ограничений).
+
+    LOG_LEVEL (str): Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+    LOG_FILE (str): Имя файла для хранения логов.
+    LOG_FORMAT (str): Формат записей в логе.
+    LOG_DATE_FORMAT (str): Формат даты и времени в логах.
 """
 
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Загрузка переменных окружения

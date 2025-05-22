@@ -1,59 +1,90 @@
 """
-Основной класс скрапера для сайта Auto.ria.com.
-Использует Playwright для эффективного сбора данных.
+Основной класс скрапера для сайта Auto.ria.com (асинхронный, httpx+bs4).
+
+Этот модуль реализует основной класс скрапера для сайта Auto.ria.com, использующий
+асинхронный подход с библиотекой httpx для HTTP-запросов и BeautifulSoup для
+парсинга HTML. Скрапер собирает данные об автомобилях, включая информацию
+о цене, пробеге, контактах продавца и другие характеристики.
+
+Attributes:
+    logger: Логгер для регистрации событий скрапинга.
+    SCRAPER_START_URL: URL-адрес начальной страницы для скрапинга (из настроек).
+    MAX_CARS_TO_PROCESS: Максимальное количество автомобилей для обработки (из настроек).
+    MAX_PAGES_TO_PARSE: Максимальное количество страниц для парсинга (из настроек).
+    SCRAPER_CONCURRENCY: Максимальное количество одновременных запросов (из настроек).
+
+Classes:
+    AutoRiaScraper: Основной класс для скрапинга данных с сайта Auto.ria.com.
 """
 
-from typing import Dict, Any, Optional
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime
-import time
-from contextlib import contextmanager
+from typing import Any, Dict, Optional
 
-from app.core.database import get_db, Session
+import httpx  # type: ignore
+from fake_useragent import UserAgent
+
+from app.config.settings import (MAX_CARS_TO_PROCESS, MAX_PAGES_TO_PARSE,
+                                 SCRAPER_CONCURRENCY, SCRAPER_START_URL)
+from app.core.database import Session, get_db
 from app.core.models import Car
-from app.scraper.parsers.search_page import SearchPageParser
 from app.scraper.parsers.car_page import CarPageParser
-from app.config.settings import (
-    SCRAPER_START_URL,
-    MAX_PAGES_TO_PARSE,
-    MAX_CARS_TO_PROCESS,
-)
+from app.scraper.parsers.search_page import SearchPageParser
 from app.utils.logger import get_logger
-from app.scraper.browser.utils import random_sleep
 
 logger = get_logger(__name__)
 
 
 class AutoRiaScraper:
     """
-    Основной скрапер для Auto.ria.com.
+    Асинхронный скрапер для Auto.ria.com.
+
+    Этот класс реализует основную логику скрапинга данных с сайта Auto.ria.com.
     Использует SearchPageParser для получения списка URL автомобилей
     и CarPageParser для парсинга каждой страницы автомобиля.
-    Сохраняет данные в базу данных.
+    Собранные данные сохраняются в базу данных PostgreSQL.
+
+    Attributes:
+        start_url (str): URL-адрес начальной страницы для скрапинга.
+        search_parser (SearchPageParser): Парсер для страниц поиска.
+        car_parser (CarPageParser): Парсер для страниц автомобилей.
+        retry_count (int): Количество повторных попыток при ошибках.
+        retry_delay (int): Задержка между повторными попытками в секундах.
+        ua (UserAgent): Генератор случайных User-Agent заголовков.
     """
 
-    def __init__(self, start_url: str = SCRAPER_START_URL, headless: bool = True):
+    def __init__(self, start_url: str = SCRAPER_START_URL):
         """
-        Инициализация скрапера.
+        Инициализация скрапера Auto.ria.com.
 
         Args:
-            start_url (str): Начальный URL для парсинга
-            headless (bool): Запускать браузер в фоновом режиме
+            start_url (str, optional): URL-адрес начальной страницы для скрапинга.
+                По умолчанию используется значение из настроек приложения.
         """
         self.start_url = start_url
-        self.headless = headless
-        self.search_parser = SearchPageParser(headless=self.headless)
-        self.car_parser = CarPageParser(headless=self.headless)
+        self.search_parser = SearchPageParser()
+        self.car_parser = CarPageParser()
         self.retry_count = 3
         self.retry_delay = 5
+        self.ua = UserAgent()
 
-    @contextmanager
-    def _error_handler(self, operation: str, url: str):
+    @asynccontextmanager
+    async def _error_handler(self, operation: str, url: str):
         """
-        Контекстный менеджер для обработки ошибок.
+        Асинхронный контекстный менеджер для обработки ошибок.
+
+        Перехватывает и логирует исключения, возникающие при выполнении операций.
 
         Args:
-            operation (str): Название операции
-            url (str): URL, с которым работаем
+            operation (str): Название выполняемой операции для логирования.
+            url (str): URL-адрес, с которым связана операция.
+
+        Yields:
+            None: Просто предоставляет контекст выполнения.
+
+        Raises:
+            Exception: Перехватывает и логирует все исключения, затем повторно их вызывает.
         """
         try:
             yield
@@ -64,19 +95,25 @@ class AutoRiaScraper:
     def _save_car_data(self, db: Session, car_data: Dict[str, Any]) -> bool:
         """
         Сохранение данных об автомобиле в базу данных.
-        Проверяет на дубликаты по URL.
+
+        Проверяет на дубликаты по URL и сохраняет данные автомобиля в базу данных.
+        Преобразует списки телефонных номеров в строку с разделителями.
 
         Args:
-            db (Session): Сессия базы данных
-            car_data (Dict[str, Any]): Данные автомобиля
+            db (Session): Сессия базы данных SQLAlchemy.
+            car_data (Dict[str, Any]): Словарь с данными автомобиля,
+                собранными парсером страницы автомобиля.
 
         Returns:
-            bool: True если сохранение успешно, False в противном случае
+            bool: True если сохранение успешно выполнено, False в случае ошибки
+                или если автомобиль с таким URL уже существует в базе данных.
+
+        Raises:
+            Exception: Перехватывает и логирует все исключения, затем возвращает False.
         """
         if not car_data or not car_data.get("url"):
             logger.warning("Нет данных для сохранения или отсутствует URL")
             return False
-
         try:
             # Проверка на дубликаты
             existing_car = db.query(Car).filter(Car.url == car_data["url"]).first()
@@ -110,7 +147,6 @@ class AutoRiaScraper:
 
             logger.info(f"Автомобиль {car_data['title']} успешно сохранен")
             return True
-
         except Exception as e:
             db.rollback()
             logger.error(
@@ -119,101 +155,119 @@ class AutoRiaScraper:
             )
             return False
 
-    def _process_car_page(
-        self, car_url: str, attempt: int = 1
+    async def _process_car_page(
+        self, car_url: str, client: httpx.AsyncClient, attempt: int = 1
     ) -> Optional[Dict[str, Any]]:
         """
-        Обработка страницы автомобиля с поддержкой повторных попыток.
+        Обработка страницы автомобиля с повторными попытками при ошибках.
+
+        Вызывает парсер страницы автомобиля и повторяет попытки при ошибках.
 
         Args:
-            car_url (str): URL страницы автомобиля
-            attempt (int): Номер текущей попытки
+            car_url (str): URL-адрес страницы автомобиля.
+            client (httpx.AsyncClient): HTTP-клиент для выполнения запросов.
+            attempt (int, optional): Номер текущей попытки. По умолчанию 1.
 
         Returns:
-            Optional[Dict[str, Any]]: Данные автомобиля или None при ошибке
+            Optional[Dict[str, Any]]: Словарь с данными автомобиля или None при ошибке.
+
+        Note:
+            При ошибке функция пытается повторить запрос до self.retry_count раз
+            с задержкой self.retry_delay секунд между попытками.
         """
         try:
-            with self._error_handler("парсинге страницы автомобиля", car_url):
-                return self.car_parser.parse(car_url)
+            async with self._error_handler("парсинге страницы автомобиля", car_url):
+                return await self.car_parser.parse(car_url, client=client)
         except Exception as e:
             if attempt < self.retry_count:
                 logger.warning(
                     f"Попытка {attempt} не удалась для {car_url}. Повторная попытка через {self.retry_delay} сек."
                 )
-                time.sleep(self.retry_delay)
-                return self._process_car_page(car_url, attempt + 1)
+                await asyncio.sleep(self.retry_delay)
+                return await self._process_car_page(car_url, client, attempt + 1)
             return None
 
-    def run(self) -> Dict[str, int]:
+    async def run(self) -> Dict[str, int]:
         """
-        Запускает процесс скрапинга.
-        Возвращает статистику обработки.
+        Запуск процесса скрапинга.
+
+        Основной метод, который выполняет полный цикл скрапинга:
+        1. Собирает ссылки на автомобили с страниц поиска
+        2. Обрабатывает каждую страницу автомобиля
+        3. Сохраняет данные в базу данных
+
+        Returns:
+            Dict[str, int]: Статистика процесса скрапинга с ключами:
+                - processed (int): Количество обработанных автомобилей
+                - saved (int): Количество сохраненных в базу данных автомобилей
+
+        Note:
+            Метод использует ограничение на количество одновременных запросов
+            через asyncio.Semaphore для предотвращения перегрузки сервера.
         """
         logger.info(f"Запуск скрапера AutoRia. URL: {self.start_url}")
-
         try:
-            # Сбор ссылок на автомобили
-            with self._error_handler("сборе ссылок", self.start_url):
-                car_links = self.search_parser.parse(
-                    start_url=self.start_url, max_pages=MAX_PAGES_TO_PARSE
-                )
+            async with self._error_handler("сборе ссылок", self.start_url):
+                async with httpx.AsyncClient(
+                    headers={"User-Agent": self.ua.random}
+                ) as client:
+                    logger.info(f"Начинаем сбор ссылок с {self.start_url}")
+                    car_links = await self.search_parser.parse(
+                        start_url=self.start_url,
+                        max_pages=MAX_PAGES_TO_PARSE,
+                        max_cars=MAX_CARS_TO_PROCESS,
+                        client=client,
+                    )
+                    if not car_links:
+                        logger.warning("Не найдено ссылок на автомобили")
+                        return {"processed": 0, "saved": 0}
 
-            if not car_links:
-                logger.warning("Не найдено ссылок на автомобили")
-                return {
-                    "processed": 0,
-                    "saved": 0
-                }
+                    # Подробное логирование результатов сбора ссылок
+                    logger.info(
+                        f"Обработано страниц: {self.search_parser.current_page + 1}"
+                    )
 
-            logger.info(f"Собрано {len(car_links)} ссылок")
+                    logger.info(f"Собрано {len(car_links)} ссылок на автомобили")
 
-            processed_count = saved_count = 0
-
-            with get_db() as db:
-                for i, car_url in enumerate(car_links, 1):
-                    if MAX_CARS_TO_PROCESS and processed_count >= MAX_CARS_TO_PROCESS:
-                        logger.info(
-                            f"Достигнут лимит в {MAX_CARS_TO_PROCESS} автомобилей"
+                    # Если ссылок слишком мало - предупреждение
+                    if len(car_links) < 10 and MAX_CARS_TO_PROCESS > 10:
+                        logger.warning(
+                            f"Собрано подозрительно мало ссылок: {len(car_links)}. Возможно, проблема с парсингом."
                         )
-                        break
 
-                    logger.info(f"Обработка {i}/{len(car_links)}: {car_url}")
+                    processed_count = saved_count = 0
+                    sem = asyncio.Semaphore(
+                        SCRAPER_CONCURRENCY
+                    )  # Ограничение параллелизма
+                    with get_db() as db:
 
-                    car_details = self._process_car_page(car_url)
-                    processed_count += 1
+                        async def process_and_save(car_url):
+                            nonlocal processed_count, saved_count
+                            async with sem:
+                                car_details = await self._process_car_page(
+                                    car_url, client
+                                )
+                                processed_count += 1
+                                if car_details and self._save_car_data(db, car_details):
+                                    saved_count += 1
 
-                    if car_details and self._save_car_data(db, car_details):
-                        saved_count += 1
-
-                    # Пауза между запросами
-                    random_sleep(1, 3)
-
+                        tasks = []
+                        for i, car_url in enumerate(car_links, 1):
+                            logger.info(f"Обработка {i}/{len(car_links)}: {car_url}")
+                            tasks.append(process_and_save(car_url))
+                        await asyncio.gather(*tasks)
             logger.info(
                 f"Скрапинг завершен. Обработано: {processed_count}, сохранено: {saved_count}"
             )
-
-            return {
-                "processed": processed_count,
-                "saved": saved_count
-            }
-
+            return {"processed": processed_count, "saved": saved_count}
         except Exception as e:
             logger.critical(
                 f"Критическая ошибка в процессе скрапинга: {str(e)}", exc_info=True
             )
-            return {
-                "processed": 0,
-                "saved": 0
-            }
-        finally:
-            # Гарантируем закрытие браузеров
-            try:
-                self.search_parser.browser_manager.stop()
-                self.car_parser.browser_manager.stop()
-            except Exception as e:
-                logger.error(f"Ошибка при закрытии браузеров: {str(e)}")
+            return {"processed": 0, "saved": 0}
 
 
+# Для ручного запуска
 if __name__ == "__main__":
-    scraper = AutoRiaScraper(headless=True)
-    scraper.run()
+    scraper = AutoRiaScraper()
+    asyncio.run(scraper.run())
