@@ -44,11 +44,8 @@
     │   ├── autoria.py
     │   ├── base.py
     │   ├── parsers/
-    │   │   ├── car_page.py
-    │   │   └── search_page.py
-    │   └── browser/
-    │       ├── manager.py
-    │       └── utils.py
+    │       ├── car_page.py
+    │       └── search_page.py
     └── tasks/          # Celery задачи
         ├── __init__.py
         ├── backup.py
@@ -60,7 +57,8 @@
 - PostgreSQL
 - SQLAlchemy
 - BeautifulSoup4
-- Playwright
+- httpx
+- asyncio
 - Celery
 - Docker & Docker Compose
 

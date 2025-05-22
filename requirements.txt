@@ -1,5 +1,5 @@
 # Основные зависимости
-playwright>=1.51.0
+httpx
 beautifulsoup4
 fake-useragent
 psycopg2-binary

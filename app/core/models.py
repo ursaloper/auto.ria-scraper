@@ -1,10 +1,21 @@
 """
 Модели данных для работы с базой данных.
+
+Этот модуль содержит определения ORM-моделей SQLAlchemy для хранения
+и управления данными, собранными скрапером AutoRia. Основная модель - Car,
+которая представляет автомобиль с сайта AutoRia.
+
+Classes:
+    Base: Базовый класс для всех ORM-моделей SQLAlchemy.
+    Car: Модель для хранения информации об автомобилях.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
+
+from sqlalchemy import String  # type: ignore
+from sqlalchemy import (Column, DateTime, Integer,  # type: ignore
+                        UniqueConstraint)
+from sqlalchemy.ext.declarative import declarative_base  # type: ignore
 
 Base = declarative_base()
 
@@ -13,19 +24,27 @@ class Car(Base):
     """
     Модель для хранения информации об автомобилях.
 
+    Содержит всю необходимую информацию о каждом автомобиле, собранную скрапером
+    с сайта AutoRia. Включает уникальный URL, информацию о ценах, контактные данные
+    продавца, данные о пробеге и идентификационную информацию автомобиля.
+
     Attributes:
-        id (int): Уникальный идентификатор записи
-        url (str): URL страницы автомобиля
-        title (str): Заголовок объявления
-        price_usd (int): Цена в USD
-        odometer (int): Пробег в километрах
-        username (str): Имя продавца
-        phone_number (str): Номер телефона продавца
-        image_url (str): URL основного изображения
-        images_count (int): Количество изображений
-        car_number (str): Номер автомобиля
-        car_vin (str): VIN-код автомобиля
-        datetime_found (datetime): Дата и время сохранения в базу
+        id (int): Уникальный идентификатор записи в базе данных.
+        url (str): URL страницы автомобиля на сайте AutoRia. Индексируется и должен быть уникальным.
+        title (str): Заголовок объявления, обычно содержит марку, модель и год выпуска.
+        price_usd (int): Цена автомобиля в долларах США.
+        odometer (int): Пробег автомобиля в километрах.
+        username (str): Имя продавца или название компании.
+        phone_number (str): Номер телефона продавца в международном формате.
+        image_url (str): URL основного изображения автомобиля.
+        images_count (int): Общее количество изображений в объявлении.
+        car_number (str): Государственный регистрационный номер автомобиля, если доступен.
+        car_vin (str): VIN-код автомобиля для его идентификации. Индексируется.
+        datetime_found (datetime): Дата и время, когда объявление было найдено и сохранено.
+
+    Note:
+        Созданы уникальные ограничения для URL и VIN-кода для предотвращения дублирования.
+        Поля url и car_vin индексируются для ускорения поиска.
     """
 
     __tablename__ = "cars"
@@ -52,5 +71,10 @@ class Car(Base):
     )
 
     def __repr__(self):
-        """Строковое представление модели."""
+        """
+        Строковое представление модели.
+
+        Returns:
+            str: Строка, содержащая ID, заголовок и VIN автомобиля.
+        """
         return f"<Car(id={self.id}, title='{self.title}', vin='{self.car_vin}')>"

@@ -1,100 +1,79 @@
 """
-Базовый класс парсера.
+Базовый класс асинхронного парсера.
+
+Этот модуль предоставляет абстрактный базовый класс для всех парсеров в проекте.
+Определяет общий интерфейс и базовую функциональность, которую должны реализовывать
+все специализированные парсеры.
+
+Attributes:
+    logger: Логгер для регистрации событий парсинга.
+
+Classes:
+    BaseScraper: Абстрактный базовый класс для всех парсеров.
 """
 
-from typing import Optional, Dict, Any
 from abc import ABC, abstractmethod
+from typing import Any, Dict
+
 from bs4 import BeautifulSoup
-from playwright.sync_api import Page
 
 from app.utils.logger import get_logger
-from app.scraper.browser.manager import BrowserManager
 
 logger = get_logger(__name__)
 
 
 class BaseScraper(ABC):
     """
-    Базовый класс для парсеров.
+    Базовый класс для асинхронных парсеров.
 
-    Attributes:
-        browser_manager (BrowserManager): Менеджер браузера
-        page (Page): Экземпляр страницы Playwright
+    Определяет общий интерфейс и базовую функциональность для всех парсеров.
+    Наследники должны реализовать метод parse() для извлечения данных
+    из конкретных типов страниц.
+
+    Methods:
+        get_soup: Создает объект BeautifulSoup из HTML-кода.
+        parse: Абстрактный метод для парсинга данных, должен быть реализован в наследниках.
     """
 
-    def __init__(self, headless: bool = True):
-        """
-        Инициализация парсера.
-
-        Args:
-            headless (bool): Запускать браузер в фоновом режиме
-        """
-        self.browser_manager = BrowserManager(headless=headless)
-        self.page: Optional[Page] = None
-
-    def start(self) -> None:
-        """Запуск парсера."""
-        self.browser_manager.start()
-        self.page = self.browser_manager.page
-
-    def stop(self) -> None:
-        """Остановка парсера."""
-        self.browser_manager.stop()
-        self.page = None
-
-    def get_page_source(self, url: str) -> Optional[str]:
-        """
-        Получение HTML-кода страницы.
-
-        Args:
-            url (str): URL страницы
-
-        Returns:
-            Optional[str]: HTML-код страницы или None в случае ошибки
-        """
-        if not self.browser_manager.get_page(url):
-            return None
-
-        return self.browser_manager.get_html()
-
-    def get_soup(self, html: str) -> BeautifulSoup:
+    @staticmethod
+    def get_soup(html: str) -> BeautifulSoup:
         """
         Создание объекта BeautifulSoup из HTML.
 
+        Преобразует HTML-код в структуру данных BeautifulSoup для последующего
+        парсинга и извлечения информации. Использует парсер lxml для лучшей
+        производительности и надежности.
+
         Args:
-            html (str): HTML-код страницы
+            html (str): HTML-код страницы для парсинга.
 
         Returns:
-            BeautifulSoup: Объект для парсинга HTML
+            BeautifulSoup: Объект BeautifulSoup для удобного парсинга HTML.
+
+        Examples:
+            >>> html = "<html><body><h1>Заголовок</h1></body></html>"
+            >>> soup = BaseScraper.get_soup(html)
+            >>> soup.h1.text
+            'Заголовок'
         """
         return BeautifulSoup(html, "lxml")
 
-    def wait_for_selector(self, selector: str, timeout: int = 30000) -> bool:
+    @abstractmethod
+    async def parse(self, *args, **kwargs) -> Dict[str, Any]:
         """
-        Ожидание появления элемента на странице.
+        Абстрактный асинхронный метод парсинга.
+
+        Должен быть реализован в дочерних классах для извлечения
+        данных из конкретных типов страниц.
 
         Args:
-            selector (str): CSS селектор
-            timeout (int): Время ожидания в миллисекундах
+            *args: Позиционные аргументы, специфичные для конкретного парсера.
+            **kwargs: Именованные аргументы, специфичные для конкретного парсера.
 
         Returns:
-            bool: True если элемент найден, False в противном случае
-        """
-        return bool(self.browser_manager.wait_for_selector(selector, timeout))
+            Dict[str, Any]: Словарь с извлеченными данными.
 
-    @abstractmethod
-    def parse(self, *args, **kwargs) -> Dict[str, Any]:
-        """
-        Абстрактный метод парсинга.
-        Должен быть реализован в дочерних классах.
+        Raises:
+            NotImplementedError: Если метод не переопределен в дочернем классе.
         """
         pass
-
-    def __enter__(self):
-        """Контекстный менеджер - запуск."""
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Контекстный менеджер - остановка."""
-        self.stop()

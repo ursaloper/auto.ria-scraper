@@ -1,25 +1,57 @@
 """
-Парсер страницы карточки автомобиля AutoRia.
+Парсер страницы карточки автомобиля AutoRia (асинхронный, httpx+bs4).
+
+Этот модуль реализует асинхронный парсер для извлечения подробной информации
+об автомобиле с карточки объявления на сайте AutoRia. Модуль использует httpx
+для HTTP-запросов и BeautifulSoup для парсинга HTML. Особенностью модуля является
+двухэтапный сбор данных: сначала извлекается основная информация из HTML-страницы,
+затем выполняется отдельный XHR-запрос для получения номера телефона продавца.
+
+Attributes:
+    logger: Логгер для регистрации событий парсинга.
+    ua: Генератор случайных User-Agent заголовков.
+
+Classes:
+    CarPageParser: Парсер для страниц с детальной информацией об автомобиле.
 """
 
+import asyncio
+import random
 import re
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
+import httpx  # type: ignore
 from bs4 import BeautifulSoup
+from fake_useragent import UserAgent
+from httpx import HTTPStatusError  # type: ignore
 
 from app.scraper.base import BaseScraper
 from app.utils.logger import get_logger
-from app.scraper.browser.utils import random_sleep
 
 logger = get_logger(__name__)
+
+ua = UserAgent()
 
 
 class CarPageParser(BaseScraper):
     """
-    Парсер для извлечения подробной информации со страницы автомобиля.
-    """
+    Асинхронный парсер для извлечения подробной информации со страницы автомобиля.
 
-    def __init__(self, headless: bool = True):
-        super().__init__(headless=headless)
+    Этот класс отвечает за сбор всех данных об автомобиле с страницы объявления,
+    включая заголовок, цену, пробег, контактную информацию продавца, информацию
+    о VIN-коде и госномере. Реализует двухэтапный подход: сначала собирает основную
+    информацию из HTML, затем выполняет XHR-запрос для получения телефона продавца.
+
+    Attributes:
+        Нет явных атрибутов класса, инициализируемых в __init__.
+
+    Methods:
+        parse: Основной метод для парсинга страницы автомобиля.
+        _extract_*: Вспомогательные методы для извлечения конкретных данных.
+        _fetch_phone: Метод для выполнения XHR-запроса к API для получения телефона продавца.
+        _normalize_phone: Метод для нормализации телефонного номера.
+        _is_deleted_listing: Метод для проверки, является ли объявление удаленным.
+    """
 
     def _extract_title(self, soup: BeautifulSoup) -> Optional[str]:
         """Извлечение заголовка объявления."""
@@ -49,11 +81,16 @@ class CarPageParser(BaseScraper):
 
     def _extract_username(self, soup: BeautifulSoup) -> Optional[str]:
         """Извлечение имени продавца."""
+        # Новый селектор для профессиональных продавцов
+        username_tag = soup.select_one("a.sellerPro")
+        if username_tag:
+            return username_tag.text.strip()
+
+        # Частные продавцы
         username_tag = soup.select_one("div.seller_info_name > a")
         if username_tag:
             return username_tag.text.strip()
 
-        # Затем для частных продавцов
         username_tag = soup.select_one(
             "div.user-name > h4.seller_info_name, div.view-seller-info .seller_info_name"
         )
@@ -64,6 +101,28 @@ class CarPageParser(BaseScraper):
         username_tag = soup.select_one(".seller_info .seller_info_name")
         if username_tag:
             return username_tag.text.strip()
+
+        # <div class="seller_info_name grey bold">Имя не указано</div>
+        username_tag = soup.select_one("div.seller_info_name.grey.bold")
+        if username_tag:
+            return username_tag.text.strip()
+
+        # <div class="seller_info_name bold">...</div>
+        username_tag = soup.select_one("div.seller_info_name.bold")
+        if username_tag:
+            return username_tag.text.strip()
+
+        # <h4 class="seller_info_name"> <a ...>...</a></h4>
+        username_tag = soup.select_one("h4.seller_info_name > a")
+        if username_tag:
+            return username_tag.text.strip()
+
+        # Проверяем, не удалено ли объявление - в этом случае username может отсутствовать
+        if self._is_deleted_listing(soup):
+            logger.info("Username не найден - объявление удалено")
+        else:
+            logger.error("Не удалось извлечь username (имя продавца) с карточки авто")
+
         return None
 
     def _normalize_phone(self, phone_text: str) -> str:
@@ -90,96 +149,6 @@ class CarPageParser(BaseScraper):
 
         # В других случаях просто добавляем +
         return "+" + digits_only
-
-    def _extract_phone_numbers(self, soup: BeautifulSoup) -> List[str]:
-        """Извлечение номеров телефонов."""
-        phone_numbers = []
-        try:
-            # Сначала закрываем cookie-баннер, если он есть
-            if self.browser_manager.close_cookie_banner():
-                logger.info("Cookie-баннер успешно закрыт")
-                # Небольшая пауза после закрытия баннера
-                random_sleep(1, 2)
-
-            # Кликаем по кнопке показа телефона
-            show_phone_selector = ".phone_show_link"
-            if self.browser_manager.click(show_phone_selector):
-                logger.debug(
-                    f"Успешный клик по кнопке показа телефона: {show_phone_selector}"
-                )
-                # Увеличиваем время ожидания для полной загрузки номера
-                random_sleep(2, 3)
-
-                # Ждем появления блока с телефоном
-                phone_selector = ".popup-successful-call-desk"
-                if self.browser_manager.wait_for_selector(phone_selector, timeout=5000):
-                    logger.debug("Блок с телефоном найден")
-
-                    # Получаем атрибут data-value через JavaScript
-                    try:
-                        phone_value = self.browser_manager.page.evaluate(
-                            """() => {
-                            const phoneElement = document.querySelector('.popup-successful-call-desk');
-                            return phoneElement ? (phoneElement.getAttribute('data-value') || phoneElement.textContent.trim()) : null;
-                        }"""
-                        )
-
-                        if phone_value:
-                            logger.info(
-                                f"Найден телефон через JavaScript: {phone_value}"
-                            )
-                            normalized_phone = self._normalize_phone(phone_value)
-                            if len(normalized_phone) > 7:
-                                phone_numbers.append(normalized_phone)
-                    except Exception as e:
-                        logger.error(
-                            f"Ошибка при получении телефона через JavaScript: {e}",
-                            exc_info=True,
-                        )
-
-                # Обновляем soup после клика для поиска номера в HTML
-                current_html = self.browser_manager.get_html()
-                if current_html:
-                    soup = self.get_soup(current_html)
-            else:
-                logger.warning("Не удалось кликнуть по кнопке показа телефона")
-
-        except Exception as e:
-            logger.error(f"Ошибка при извлечении телефона: {e}", exc_info=True)
-
-        # Ищем телефон в HTML, если не нашли через JavaScript
-        if not phone_numbers:
-            # Селекторы для поиска телефонов в разных вариантах разметки
-            phone_selectors = [
-                ".popup-successful-call-desk",  # Основной селектор после клика
-                'div[data-value^="("]',  # div с атрибутом data-value, начинающимся с (
-                ".phones_item .phone",  # Классические селекторы
-                '.seller_info_item [href^="tel:"]',  # Ссылки с tel:
-                ".phone.bold",  # Дополнительный селектор
-            ]
-
-            for selector in phone_selectors:
-                phone_tags = soup.select(selector)
-                for tag in phone_tags:
-                    # Пробуем извлечь телефон из data-value или из текста
-                    if tag.has_attr("data-value"):
-                        phone_text = tag["data-value"]
-                    elif tag.has_attr("href") and tag["href"].startswith("tel:"):
-                        phone_text = tag["href"].replace("tel:", "")
-                    else:
-                        phone_text = tag.text.strip()
-
-                    if phone_text:
-                        normalized_phone = self._normalize_phone(phone_text)
-                        if len(normalized_phone) > 7:
-                            phone_numbers.append(normalized_phone)
-
-        if phone_numbers:
-            logger.info(f"Найдены телефоны: {phone_numbers}")
-        else:
-            logger.warning("Телефоны не найдены")
-
-        return list(set(phone_numbers))  # Возвращаем уникальные номера
 
     def _extract_image_url(self, soup: BeautifulSoup) -> Optional[str]:
         """
@@ -231,31 +200,143 @@ class CarPageParser(BaseScraper):
         )
         return vin_tag.text.strip() if vin_tag else None
 
-    def parse_car_page(self, url: str) -> Optional[Dict[str, Any]]:
+    def _is_deleted_listing(self, soup: BeautifulSoup) -> bool:
         """
-        Парсинг одной страницы автомобиля.
+        Проверяет, является ли объявление удаленным.
+
+        Args:
+            soup (BeautifulSoup): Объект BeautifulSoup с HTML страницы
+
+        Returns:
+            bool: True если объявление удалено, False в противном случае
+        """
+        # Проверяем наличие блока с уведомлением об удалении
+        deleted_block = soup.select_one(
+            "div#autoDeletedTopBlock.notice.notice--icon.notice--orange"
+        )
+        if deleted_block:
+            # Можно также проверить текст внутри блока
+            notice_text = deleted_block.text.strip()
+            if "удалено и не принимает участия в поиске" in notice_text:
+                logger.info(f"Найдено удаленное объявление: {notice_text}")
+                return True
+        return False
+
+    async def _fetch_phone(
+        self, soup: BeautifulSoup, url: str, client: httpx.AsyncClient, attempt: int = 1
+    ) -> Optional[str]:
+        MAX_RETRIES = 5
+        # Ищем car_id в url
+        m = re.search(r"/auto_\w+_(\d+)\.html", url)
+        car_id = m.group(1) if m else None
+        if not car_id:
+            logger.error(f"Не удалось извлечь car_id из url: {url}")
+            return None
+        # Парсим hash и expires из <script> или других элементов с data-hash/data-expires
+        hash_val = None
+        expires = None
+        # 1. <script ... data-hash=... data-expires=...>
+        script_tag = soup.find(
+            lambda tag: tag.name == "script"
+            and tag.has_attr("data-hash")
+            and tag.has_attr("data-expires")
+        )
+        if script_tag:
+            hash_val = script_tag.get("data-hash")
+            expires = script_tag.get("data-expires")
+        # 2. Если не нашли — ищем любой элемент с этими data-атрибутами
+        if not hash_val or not expires:
+            el = soup.find(attrs={"data-hash": True, "data-expires": True})
+            if el:
+                hash_val = el.get("data-hash")
+                expires = el.get("data-expires")
+        if not hash_val or not expires:
+            logger.error(f"Не удалось найти hash/expires для телефона на {url}")
+            return None
+        # Формируем XHR GET-запрос
+        api_url = f"https://auto.ria.com/users/phones/{car_id}?hash={hash_val}&expires={expires}"
+        headers = {
+            "User-Agent": ua.random,
+            "Referer": url,
+            "Accept": "*/*",
+        }
+        try:
+            resp = await client.get(api_url, headers=headers)
+            resp.raise_for_status()
+            json_data = resp.json()
+            phone = None
+            if "phones" in json_data and json_data["phones"]:
+                phone = json_data["phones"][0].get("phoneFormatted")
+            elif "formattedPhoneNumber" in json_data:
+                phone = json_data["formattedPhoneNumber"]
+            await asyncio.sleep(random.uniform(2, 3))  # Пауза после запроса
+            if phone:
+                logger.info(f"Телефон успешно получен через XHR GET: {phone}")
+                return self._normalize_phone(phone)
+        except HTTPStatusError as e:
+            if e.response.status_code == 429:
+                retry_after = e.response.headers.get("Retry-After")
+                wait_time = (
+                    int(retry_after) if retry_after and retry_after.isdigit() else 60
+                )
+                logger.warning(
+                    f"429 Too Many Requests. Жду {wait_time} сек перед повтором."
+                )
+                await asyncio.sleep(wait_time)
+                if attempt < MAX_RETRIES:
+                    return await self._fetch_phone(soup, url, client, attempt + 1)
+                else:
+                    logger.error(
+                        f"Превышено количество попыток получения телефона для {url}"
+                    )
+                    return None
+            else:
+                logger.error(f"Ошибка при XHR GET-запросе телефона: {e}", exc_info=True)
+                await asyncio.sleep(random.uniform(2, 3))  # Пауза после ошибки
+        except Exception as e:
+            logger.error(f"Ошибка при XHR GET-запросе телефона: {e}", exc_info=True)
+            await asyncio.sleep(random.uniform(2, 3))  # Пауза после ошибки
+        logger.error(f"Не удалось получить телефон для {url}")
+        return None
+
+    async def parse(
+        self, url: str, client: Optional[httpx.AsyncClient] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Основной метод для парсинга страницы автомобиля.
 
         Args:
             url (str): URL страницы автомобиля.
 
         Returns:
-            Optional[Dict[str, Any]]: Словарь с данными об автомобиле или None при ошибке.
+            Optional[Dict[str, Any]]: Словарь с данными или None.
         """
         logger.info(f"Парсинг страницы автомобиля: {url}")
-        html = self.get_page_source(url)
-        if not html:
-            logger.error(f"Не удалось получить HTML для URL: {url}")
+        close_client = False
+        if client is None:
+            client = httpx.AsyncClient()
+            close_client = True
+        try:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            html = resp.text
+        except Exception as e:
+            logger.error(f"Не удалось получить HTML для URL: {url}: {e}")
+            if close_client:
+                await client.aclose()
             return None
 
         soup = self.get_soup(html)
 
-        # Ожидание загрузки ключевых элементов
-        if not self.wait_for_selector(
-            "div.price_value, h1.head, .ticket-status-0", timeout=20000
-        ):
-            logger.warning(
-                f"Ключевые элементы на странице {url} не загрузились вовремя."
-            )
+        # Проверяем, не удалено ли объявление
+        if self._is_deleted_listing(soup):
+            logger.warning(f"Объявление удалено, пропускаем: {url}")
+            if close_client:
+                await client.aclose()
+            return None
+
+        # Если username не найден, но объявление не помечено как удаленное - продолжаем парсинг
+        # В таком случае _extract_username может вернуть None, и это будет обработано позже
 
         data = {
             "url": url,
@@ -263,17 +344,21 @@ class CarPageParser(BaseScraper):
             "price_usd": self._extract_price_usd(soup),
             "odometer": self._extract_odometer(soup),
             "username": self._extract_username(soup),
-            "phone_numbers": [],  # Будет заполнено ниже, после возможного клика
+            "phone_numbers": [],  # Заполним после XHR
             "image_url": self._extract_image_url(soup),
-            "images_count": None,  # Будет определено после image_url
+            "images_count": None,
             "car_number": self._extract_car_number(soup),
             "car_vin": self._extract_car_vin(soup),
         }
-
-        # Извлечение телефонов (может потребовать клика)
-        data["phone_numbers"] = self._extract_phone_numbers(soup)
-
-        # Обновление количества изображений после получения основного URL
+        # Сначала все данные, потом телефон
+        phone = await self._fetch_phone(soup, url, client)
+        if not phone:
+            logger.error(f"Телефон не получен, авто не будет сохранено: {url}")
+            if close_client:
+                await client.aclose()
+            return None
+        data["phone_numbers"] = [phone]
+        # Количество фото
         images_count = self._extract_images_count(soup)
         if images_count:
             data["images_count"] = images_count
@@ -287,22 +372,10 @@ class CarPageParser(BaseScraper):
             logger.error(
                 f"Не удалось извлечь заголовок или цену для {url}. Данные: {data}"
             )
-
         logger.info(f"Успешно извлечены данные для {url}")
+        if close_client:
+            await client.aclose()
         return data
-
-    def parse(self, url: str) -> Optional[Dict[str, Any]]:
-        """
-        Основной метод для парсинга страницы автомобиля.
-
-        Args:
-            url (str): URL страницы автомобиля.
-
-        Returns:
-            Optional[Dict[str, Any]]: Словарь с данными или None.
-        """
-        with self:
-            return self.parse_car_page(url)
 
 
 # Пример использования (для тестирования)
