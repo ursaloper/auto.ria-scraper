@@ -1,7 +1,7 @@
 """
 Основные настройки приложения.
 
-Этот модуль содержит все основные параметры конфигурации для скрапера AutoRia.
+Этот модуль содержит все основные параметры конфигурации для скрапера auto.ria.com.
 Настройки загружаются из переменных окружения с использованием python-dotenv,
 с определенными значениями по умолчанию в случае отсутствия переменных.
 
@@ -73,7 +73,7 @@ CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 
 # Настройки скрапера
-SCRAPER_START_URL = os.getenv("SCRAPER_START_URL", "https://auto.ria.com/uk/car/used/")
+SCRAPER_START_URL = os.getenv("SCRAPER_START_URL", "https://auto.ria.com/search/?lang_id=2&page=0&countpage=100&indexName=auto&custom=1&abroad=2")
 SCRAPER_START_TIME = os.getenv("SCRAPER_START_TIME", "12:00")
 DUMP_TIME = os.getenv("DUMP_TIME", "00:00")
 SCRAPER_CONCURRENCY = int(os.getenv("SCRAPER_CONCURRENCY", "3"))

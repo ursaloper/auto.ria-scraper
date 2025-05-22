@@ -1,8 +1,8 @@
 """
-Парсер страницы поиска AutoRia (асинхронный, httpx+bs4).
+Парсер страницы поиска auto.ria.com (асинхронный, httpx+bs4).
 
 Этот модуль реализует асинхронный парсер для извлечения списка ссылок на автомобили
-с страниц поиска AutoRia. Использует httpx для HTTP-запросов и BeautifulSoup для
+с страниц поиска auto.ria.com. Использует httpx для HTTP-запросов и BeautifulSoup для
 парсинга HTML. Поддерживает пагинацию и ограничение количества обрабатываемых страниц.
 
 Attributes:
@@ -10,16 +10,16 @@ Attributes:
     SCRAPER_START_URL: URL-адрес начальной страницы для скрапинга (из настроек).
 
 Classes:
-    SearchPageParser: Парсер для страниц поиска AutoRia.
+    SearchPageParser: Парсер для страниц поиска auto.ria.com.
 """
 
 import asyncio
 import re
 from typing import Any, Dict, List, Optional
-from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx  # type: ignore
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from app.config.settings import SCRAPER_START_URL
 from app.scraper.base import BaseScraper
@@ -89,19 +89,17 @@ class SearchPageParser(BaseScraper):
         Note:
             Просто увеличивает номер страницы на 1, независимо от общего количества страниц.
         """
-        # Определяем следующий номер страницы
+        # Парсим текущий URL
+        parsed_url = urlparse(current_url)
+        query_params = parse_qs(parsed_url.query)
+        # Увеличиваем номер страницы на 1
         next_page = self.current_page + 1
-
-        # Если в URL уже есть параметр page, заменяем его значение
-        if "page=" in current_url:
-            next_url = re.sub(r"page=\d+", f"page={next_page}", current_url)
-        # Если в URL уже есть параметры (есть ?), добавляем page как новый параметр
-        elif "?" in current_url:
-            next_url = f"{current_url}&page={next_page}"
-        # Если в URL нет параметров, добавляем page как первый параметр
-        else:
-            next_url = f"{current_url}?page={next_page}"
-
+        query_params["page"] = [str(next_page)]
+        # Собираем новый URL
+        new_query = urlencode(query_params, doseq=True)
+        next_url_parts = list(parsed_url)
+        next_url_parts[4] = new_query
+        next_url = urlunparse(next_url_parts)
         logger.info(f"Сгенерирован URL для страницы {next_page}: {next_url}")
         return next_url
 
@@ -187,19 +185,22 @@ class SearchPageParser(BaseScraper):
             close_client = True
         try:
             while current_url:
-                if (
-                    max_pages and self.current_page >= max_pages
-                ):  # Проверяем >= т.к. начинаем с 0
+                # Проверяем лимит страниц ДО перехода на следующую страницу
+                if max_pages and self.current_page >= max_pages:
                     logger.info(f"Достигнут лимит в {max_pages} страниц.")
                     break
 
                 page_data = await self.parse_page(current_url, client)
                 all_car_links.extend(page_data["car_links"])
-                current_url = page_data["next_page_url"]
+                next_url = page_data["next_page_url"]
 
-                if current_url:
-                    logger.info(f"Переход на следующую страницу: {current_url}")
+                if next_url:
                     self.current_page += 1
+                    if max_pages and self.current_page >= max_pages:
+                        logger.info(f"Достигнут лимит в {max_pages} страниц.")
+                        break
+                    logger.info(f"Переход на следующую страницу: {next_url}")
+                    current_url = next_url
                     await asyncio.sleep(1)  # Пауза между страницами
                 else:
                     logger.info("Достигнута последняя страница поиска.")

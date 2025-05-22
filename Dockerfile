@@ -11,7 +11,6 @@ ENV PYTHONUNBUFFERED=1 \
 # Установка необходимых пакетов
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    wget \
     ca-certificates \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
@@ -26,7 +25,7 @@ COPY requirements.txt .
 
 # Установка Python зависимостей
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
 # Копируем код приложения
 COPY . .
