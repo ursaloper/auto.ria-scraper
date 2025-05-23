@@ -22,9 +22,14 @@ import os
 import subprocess
 from datetime import datetime
 
-from app.config.settings import (DUMPS_DIR, POSTGRES_DB, POSTGRES_HOST,
-                                 POSTGRES_PASSWORD, POSTGRES_PORT,
-                                 POSTGRES_USER)
+from app.config.settings import (
+    DUMPS_DIR,
+    POSTGRES_DB,
+    POSTGRES_HOST,
+    POSTGRES_PASSWORD,
+    POSTGRES_PORT,
+    POSTGRES_USER,
+)
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)

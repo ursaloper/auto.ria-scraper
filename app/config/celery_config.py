@@ -27,8 +27,12 @@ Note:
 from celery import Celery
 from celery.schedules import crontab
 
-from app.config.settings import (CELERY_BROKER_URL, CELERY_RESULT_BACKEND,
-                                 DUMP_TIME, SCRAPER_START_TIME)
+from app.config.settings import (
+    CELERY_BROKER_URL,
+    CELERY_RESULT_BACKEND,
+    DUMP_TIME,
+    SCRAPER_START_TIME,
+)
 
 # Создаем экземпляр Celery
 celery_app = Celery(

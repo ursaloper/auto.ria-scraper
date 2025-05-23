@@ -21,8 +21,7 @@ Functions:
 import logging
 import logging.handlers
 
-from app.config.settings import (LOG_DATE_FORMAT, LOG_FORMAT, LOG_LEVEL,
-                                 LOGS_DIR)
+from app.config.settings import LOG_DATE_FORMAT, LOG_FORMAT, LOG_LEVEL, LOGS_DIR
 
 
 def get_logger(name: str) -> logging.Logger:

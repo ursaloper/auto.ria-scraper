@@ -25,12 +25,16 @@ from typing import Any, Dict, Optional
 import httpx  # type: ignore
 from fake_useragent import UserAgent
 
-from app.config.settings import (MAX_CARS_TO_PROCESS, MAX_PAGES_TO_PARSE,
-                                 SCRAPER_CONCURRENCY, SCRAPER_START_URL)
+from app.config.settings import (
+    MAX_CARS_TO_PROCESS,
+    MAX_PAGES_TO_PARSE,
+    SCRAPER_CONCURRENCY,
+    SCRAPER_START_URL,
+)
 from app.core.database import Session, get_db
-from app.core.models import Car
 from app.scraper.parsers.car_page import CarPageParser
 from app.scraper.parsers.search_page import SearchPageParser
+from app.utils.db_utils import check_url_exists, check_urls_batch, safe_insert_car
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -96,7 +100,8 @@ class AutoRiaScraper:
         """
         Сохранение данных об автомобиле в базу данных.
 
-        Проверяет на дубликаты по URL и сохраняет данные автомобиля в базу данных.
+        Использует безопасную вставку с блокировкой на уровне транзакции
+        для предотвращения гонки условий при параллельной вставке.
         Преобразует списки телефонных номеров в строку с разделителями.
 
         Args:
@@ -105,22 +110,13 @@ class AutoRiaScraper:
                 собранными парсером страницы автомобиля.
 
         Returns:
-            bool: True если сохранение успешно выполнено, False в случае ошибки
-                или если автомобиль с таким URL уже существует в базе данных.
-
-        Raises:
-            Exception: Перехватывает и логирует все исключения, затем возвращает False.
+            bool: True если сохранение успешно выполнено, False в случае ошибки.
         """
         if not car_data or not car_data.get("url"):
             logger.warning("Нет данных для сохранения или отсутствует URL")
             return False
-        try:
-            # Проверка на дубликаты
-            existing_car = db.query(Car).filter(Car.url == car_data["url"]).first()
-            if existing_car:
-                logger.info(f"Автомобиль с URL {car_data['url']} уже существует в БД")
-                return False
 
+        try:
             # Подготовка телефонных номеров
             phone_numbers_str = None
             if isinstance(car_data.get("phone_numbers"), list):
@@ -128,27 +124,26 @@ class AutoRiaScraper:
             elif isinstance(car_data.get("phone_numbers"), str):
                 phone_numbers_str = car_data["phone_numbers"]
 
-            # Создание и сохранение записи
-            new_car = Car(
-                url=car_data["url"],
-                title=car_data.get("title"),
-                price_usd=car_data.get("price_usd"),
-                odometer=car_data.get("odometer"),
-                username=car_data.get("username"),
-                phone_number=phone_numbers_str,
-                image_url=car_data.get("image_url"),
-                images_count=car_data.get("images_count"),
-                car_number=car_data.get("car_number"),
-                car_vin=car_data.get("car_vin"),
-                datetime_found=datetime.now(),
-            )
-            db.add(new_car)
-            db.commit()
+            # Подготовка данных для вставки
+            car_insert_data = {
+                "url": car_data["url"],
+                "title": car_data.get("title"),
+                "price_usd": car_data.get("price_usd"),
+                "odometer": car_data.get("odometer"),
+                "username": car_data.get("username"),
+                "phone_number": phone_numbers_str,
+                "image_url": car_data.get("image_url"),
+                "images_count": car_data.get("images_count"),
+                "car_number": car_data.get("car_number"),
+                "car_vin": car_data.get("car_vin"),
+                "datetime_found": datetime.now(),
+            }
 
-            logger.info(f"Автомобиль {car_data['title']} успешно сохранен")
-            return True
+            # Безопасная вставка с блокировкой
+            car_id = safe_insert_car(db, car_insert_data)
+
+            return car_id is not None
         except Exception as e:
-            db.rollback()
             logger.error(
                 f"Ошибка при сохранении автомобиля {car_data.get('url')}: {str(e)}",
                 exc_info=True,
@@ -156,16 +151,18 @@ class AutoRiaScraper:
             return False
 
     async def _process_car_page(
-        self, car_url: str, client: httpx.AsyncClient, attempt: int = 1
+        self, car_url: str, client: httpx.AsyncClient, db: Session, attempt: int = 1
     ) -> Optional[Dict[str, Any]]:
         """
         Обработка страницы автомобиля с повторными попытками при ошибках.
 
-        Вызывает парсер страницы автомобиля и повторяет попытки при ошибках.
+        Сначала проверяет, существует ли запись с данным URL в базе данных,
+        и только затем выполняет запрос к странице автомобиля.
 
         Args:
             car_url (str): URL-адрес страницы автомобиля.
             client (httpx.AsyncClient): HTTP-клиент для выполнения запросов.
+            db (Session): Сессия базы данных SQLAlchemy.
             attempt (int, optional): Номер текущей попытки. По умолчанию 1.
 
         Returns:
@@ -175,6 +172,12 @@ class AutoRiaScraper:
             При ошибке функция пытается повторить запрос до self.retry_count раз
             с задержкой self.retry_delay секунд между попытками.
         """
+        # Сначала проверяем, есть ли запись с таким URL в базе данных
+        car_id = check_url_exists(db, car_url)
+        if car_id:
+            logger.info(f"Автомобиль с URL {car_url} уже существует в БД, ID: {car_id}")
+            return None
+
         try:
             async with self._error_handler("парсинге страницы автомобиля", car_url):
                 return await self.car_parser.parse(car_url, client=client)
@@ -184,7 +187,7 @@ class AutoRiaScraper:
                     f"Попытка {attempt} не удалась для {car_url}. Повторная попытка через {self.retry_delay} сек."
                 )
                 await asyncio.sleep(self.retry_delay)
-                return await self._process_car_page(car_url, client, attempt + 1)
+                return await self._process_car_page(car_url, client, db, attempt + 1)
             return None
 
     async def run(self) -> Dict[str, int]:
@@ -193,78 +196,175 @@ class AutoRiaScraper:
 
         Основной метод, который выполняет полный цикл скрапинга:
         1. Собирает ссылки на автомобили с страниц поиска
-        2. Обрабатывает каждую страницу автомобиля
-        3. Сохраняет данные в базу данных
+        2. Проверяет, какие ссылки уже обработаны (есть в БД)
+        3. Обрабатывает каждую новую страницу автомобиля параллельно сразу после получения ссылок
+        4. Сохраняет данные в базу данных
 
         Returns:
             Dict[str, int]: Статистика процесса скрапинга с ключами:
                 - processed (int): Количество обработанных автомобилей
                 - saved (int): Количество сохраненных в базу данных автомобилей
+                - skipped (int): Количество пропущенных автомобилей (уже в БД)
 
         Note:
             Метод использует ограничение на количество одновременных запросов
             через asyncio.Semaphore для предотвращения перегрузки сервера.
         """
         logger.info(f"Запуск скрапера AutoRia. URL: {self.start_url}")
+        processed_count = saved_count = skipped_count = 0
+        car_links_total = []
+        sem = asyncio.Semaphore(SCRAPER_CONCURRENCY)  # Ограничение параллелизма
+
+        # Функция для обработки одного автомобиля
+        async def process_car(car_url, client, db):
+            nonlocal processed_count, saved_count
+            async with sem:
+                car_details = await self._process_car_page(car_url, client, db)
+                processed_count += 1
+                if car_details and self._save_car_data(db, car_details):
+                    saved_count += 1
+
         try:
             async with self._error_handler("сборе ссылок", self.start_url):
                 async with httpx.AsyncClient(
                     headers={"User-Agent": self.ua.random}
                 ) as client:
                     logger.info(f"Начинаем сбор ссылок с {self.start_url}")
-                    car_links = await self.search_parser.parse(
-                        start_url=self.start_url,
-                        max_pages=MAX_PAGES_TO_PARSE,
-                        max_cars=MAX_CARS_TO_PROCESS,
-                        client=client,
-                    )
-                    if not car_links:
-                        logger.warning("Не найдено ссылок на автомобили")
-                        return {"processed": 0, "saved": 0}
 
-                    # Подробное логирование результатов сбора ссылок
-                    logger.info(
-                        f"Обработано страниц: {self.search_parser.current_page}"
-                    )
+                    # Все задачи обработки автомобилей
+                    car_tasks = []
 
-                    logger.info(f"Собрано {len(car_links)} ссылок на автомобили")
-
-                    # Если ссылок слишком мало - предупреждение
-                    if len(car_links) < 10 and MAX_CARS_TO_PROCESS > 10:
-                        logger.warning(
-                            f"Собрано подозрительно мало ссылок: {len(car_links)}. Возможно, проблема с парсингом."
-                        )
-
-                    processed_count = saved_count = 0
-                    sem = asyncio.Semaphore(
-                        SCRAPER_CONCURRENCY
-                    )  # Ограничение параллелизма
                     with get_db() as db:
+                        # Счетчик для отслеживания общего количества обрабатываемых URL (включая пропущенные)
+                        total_urls_count = 0
+                        # Счетчик страниц
+                        page_count = 0
+                        current_url = self.start_url
 
-                        async def process_and_save(car_url):
-                            nonlocal processed_count, saved_count
-                            async with sem:
-                                car_details = await self._process_car_page(
-                                    car_url, client
+                        # Список URL, которые уже есть в БД (для оптимизации)
+                        existing_urls = set()
+
+                        # Обрабатываем каждую страницу поиска
+                        while current_url:
+                            if MAX_PAGES_TO_PARSE and page_count >= MAX_PAGES_TO_PARSE:
+                                logger.info(
+                                    f"Достигнут лимит в {MAX_PAGES_TO_PARSE} страниц."
                                 )
-                                processed_count += 1
-                                if car_details and self._save_car_data(db, car_details):
-                                    saved_count += 1
+                                break
 
-                        tasks = []
-                        for i, car_url in enumerate(car_links, 1):
-                            logger.info(f"Обработка {i}/{len(car_links)}: {car_url}")
-                            tasks.append(process_and_save(car_url))
-                        await asyncio.gather(*tasks)
+                            # Парсим страницу поиска
+                            page_data = await self.search_parser.parse_page(
+                                current_url, client
+                            )
+                            car_links = page_data["car_links"]
+                            next_url = page_data["next_page_url"]
+
+                            logger.info(
+                                f"Найдено {len(car_links)} ссылок на странице {page_count}."
+                            )
+
+                            # Проверяем на дубликаты перед добавлением в общий список
+                            new_links = []
+                            for link in car_links:
+                                if link not in car_links_total:
+                                    new_links.append(link)
+                                    car_links_total.append(link)
+
+                            logger.info(
+                                f"Добавлено {len(new_links)} новых уникальных ссылок (отфильтровано {len(car_links) - len(new_links)} дубликатов)."
+                            )
+
+                            # Пакетная проверка URL в базе данных
+                            batch_urls_to_check = [
+                                url for url in new_links if url not in existing_urls
+                            ]
+                            if batch_urls_to_check:
+                                batch_existing = check_urls_batch(
+                                    db, batch_urls_to_check
+                                )
+                                existing_urls.update(batch_existing.keys())
+                                skipped_count += len(batch_existing)
+                                logger.info(
+                                    f"Найдено {len(batch_existing)} URL, которые уже есть в БД"
+                                )
+
+                            # Статистика по текущему состоянию
+                            logger.info(
+                                f"Статистика: всего URL: {total_urls_count}, пропущено: {skipped_count}, "
+                                f"задач создано: {len(car_tasks)}, лимит: {MAX_CARS_TO_PROCESS or 'не установлен'}"
+                            )
+
+                            # Запускаем обработку только новых автомобилей с текущей страницы
+                            for car_url in new_links:
+                                # Увеличиваем общий счетчик URL
+                                total_urls_count += 1
+
+                                # Проверяем лимит на общее количество URL
+                                if (
+                                    MAX_CARS_TO_PROCESS
+                                    and total_urls_count > MAX_CARS_TO_PROCESS
+                                ):
+                                    logger.info(
+                                        f"Достигнут лимит в {MAX_CARS_TO_PROCESS} URL (обработано + пропущено)."
+                                    )
+                                    break
+
+                                # Пропускаем URL, которые уже есть в БД
+                                if car_url in existing_urls:
+                                    logger.debug(
+                                        f"Пропускаем {car_url} - уже есть в БД"
+                                    )
+                                    continue
+
+                                logger.info(
+                                    f"Обработка {len(car_tasks)+1}/{MAX_CARS_TO_PROCESS or 'неограничено'}: {car_url}"
+                                )
+                                task = asyncio.create_task(
+                                    process_car(car_url, client, db)
+                                )
+                                car_tasks.append(task)
+
+                            # Проверяем, не достигли ли мы лимита
+                            if (
+                                MAX_CARS_TO_PROCESS
+                                and total_urls_count >= MAX_CARS_TO_PROCESS
+                            ):
+                                logger.info(
+                                    f"Достигнут лимит в {MAX_CARS_TO_PROCESS} URL (обработано + пропущено)."
+                                )
+                                break
+
+                            # Переходим на следующую страницу, если она есть
+                            if next_url:
+                                current_url = next_url
+                                page_count += 1
+                                await asyncio.sleep(1)  # Пауза между страницами
+                            else:
+                                logger.info("Достигнута последняя страница поиска.")
+                                break
+
+                        # Ожидаем завершения всех задач обработки автомобилей
+                        if car_tasks:
+                            await asyncio.gather(*car_tasks)
+
             logger.info(
-                f"Скрапинг завершен. Обработано: {processed_count}, сохранено: {saved_count}"
+                f"Скрапинг завершен. Обработано страниц: {page_count}. Всего ссылок: {len(car_links_total)}. "
+                f"Пропущено (уже в БД): {skipped_count}. Обработано авто: {processed_count}, сохранено: {saved_count}"
             )
-            return {"processed": processed_count, "saved": saved_count}
+            return {
+                "processed": processed_count,
+                "saved": saved_count,
+                "skipped": skipped_count,
+            }
         except Exception as e:
             logger.critical(
                 f"Критическая ошибка в процессе скрапинга: {str(e)}", exc_info=True
             )
-            return {"processed": 0, "saved": 0}
+            return {
+                "processed": processed_count,
+                "saved": saved_count,
+                "skipped": skipped_count,
+            }
 
 
 # Для ручного запуска
