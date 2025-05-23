@@ -52,7 +52,7 @@ class Car(Base):
     url = Column(String, unique=True, nullable=False, index=True)
     title = Column(String, nullable=False)
     price_usd = Column(Integer, nullable=False)
-    odometer = Column(Integer, nullable=False)  # Хранится в километрах
+    odometer = Column(Integer, nullable=True)  # Хранится в километрах
     username = Column(String, nullable=False)
     phone_number = Column(
         String, nullable=False
