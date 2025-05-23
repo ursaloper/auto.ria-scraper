@@ -14,12 +14,12 @@ Classes:
 """
 
 import asyncio
-import re
+import random
 from typing import Any, Dict, List, Optional
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx  # type: ignore
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from app.config.settings import SCRAPER_START_URL
 from app.scraper.base import BaseScraper
@@ -68,9 +68,13 @@ class SearchPageParser(BaseScraper):
             link_tag = item.select_one("a.m-link-ticket")
             if link_tag and link_tag.has_attr("href"):
                 car_links.append(link_tag["href"])
-        logger.info(
-            f"Найдено {len(car_links)} ссылок на автомобили на странице {self.current_page}"
+
+        page_str = (
+            f"на странице {self.current_page}"
+            if self.current_page > 0
+            else "на первой странице"
         )
+        logger.info(f"Найдено {len(car_links)} ссылок на автомобили {page_str}")
         return car_links
 
     def _get_next_page_url(self, current_url: str) -> str:
@@ -92,9 +96,19 @@ class SearchPageParser(BaseScraper):
         # Парсим текущий URL
         parsed_url = urlparse(current_url)
         query_params = parse_qs(parsed_url.query)
+
+        # Определяем текущий номер страницы из URL
+        current_page_num = 0
+        if "page" in query_params and query_params["page"]:
+            try:
+                current_page_num = int(query_params["page"][0])
+            except (ValueError, IndexError):
+                current_page_num = 0
+
         # Увеличиваем номер страницы на 1
-        next_page = self.current_page + 1
+        next_page = current_page_num + 1
         query_params["page"] = [str(next_page)]
+
         # Собираем новый URL
         new_query = urlencode(query_params, doseq=True)
         next_url_parts = list(parsed_url)
@@ -123,13 +137,44 @@ class SearchPageParser(BaseScraper):
         Raises:
             Exception: Перехватывает и логирует все исключения при запросе HTML.
         """
-        logger.info(f"Парсинг страницы поиска: {url}")
-        try:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            html = resp.text
-        except Exception as e:
-            logger.error(f"Не удалось получить HTML для URL: {url}: {e}")
+        # Обновляем текущую страницу на основе URL
+        parsed_url = urlparse(url)
+        query_params = parse_qs(parsed_url.query)
+        if "page" in query_params and query_params["page"]:
+            try:
+                self.current_page = int(query_params["page"][0])
+            except (ValueError, IndexError):
+                self.current_page = 0
+
+        logger.info(f"Парсинг страницы поиска: {url} (страница {self.current_page})")
+        max_retries = 3
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                html = resp.text
+                break
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 503 and retry_count < max_retries - 1:
+                    retry_count += 1
+                    wait_time = (
+                        5 + random.randint(1, 5) * retry_count
+                    )  # Увеличиваем время ожидания с каждой попыткой
+                    logger.warning(
+                        f"Получен статус 503 для {url}. Повторная попытка {retry_count}/{max_retries} через {wait_time} сек."
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"Не удалось получить HTML для URL: {url}: {e}")
+                    return {"car_links": [], "next_page_url": None}
+            except Exception as e:
+                logger.error(f"Не удалось получить HTML для URL: {url}: {e}")
+                return {"car_links": [], "next_page_url": None}
+        else:
+            # Если все попытки исчерпаны
+            logger.error(f"Исчерпаны все попытки получения HTML для URL: {url}")
             return {"car_links": [], "next_page_url": None}
 
         soup = self.get_soup(html)
@@ -178,15 +223,15 @@ class SearchPageParser(BaseScraper):
         """
         all_car_links = []
         current_url: Optional[str] = start_url
-        self.current_page = 0  # Сбрасываем счетчик страниц
+        pages_processed = 0  # Счетчик обработанных страниц
         close_client = False
         if client is None:
             client = httpx.AsyncClient()
             close_client = True
         try:
             while current_url:
-                # Проверяем лимит страниц ДО перехода на следующую страницу
-                if max_pages and self.current_page >= max_pages:
+                # Проверяем лимит страниц
+                if max_pages and pages_processed >= max_pages:
                     logger.info(f"Достигнут лимит в {max_pages} страниц.")
                     break
 
@@ -194,11 +239,10 @@ class SearchPageParser(BaseScraper):
                 all_car_links.extend(page_data["car_links"])
                 next_url = page_data["next_page_url"]
 
+                # Увеличиваем счетчик обработанных страниц
+                pages_processed += 1
+
                 if next_url:
-                    self.current_page += 1
-                    if max_pages and self.current_page >= max_pages:
-                        logger.info(f"Достигнут лимит в {max_pages} страниц.")
-                        break
                     logger.info(f"Переход на следующую страницу: {next_url}")
                     current_url = next_url
                     await asyncio.sleep(1)  # Пауза между страницами

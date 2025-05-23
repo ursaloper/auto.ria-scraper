@@ -277,7 +277,7 @@ class CarPageParser(BaseScraper):
             if e.response.status_code == 429:
                 retry_after = e.response.headers.get("Retry-After")
                 wait_time = (
-                    int(retry_after) if retry_after and retry_after.isdigit() else 60
+                    int(retry_after) if retry_after and retry_after.isdigit() else 10
                 )
                 logger.warning(
                     f"429 Too Many Requests. Жду {wait_time} сек перед повтором."

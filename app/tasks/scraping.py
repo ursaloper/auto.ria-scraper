@@ -44,6 +44,7 @@ def scrape_autoria(self):
             - status (str): "success" или "error"
             - processed (int): Количество обработанных автомобилей (при успехе)
             - saved (int): Количество сохраненных новых записей (при успехе)
+            - skipped (int): Количество пропущенных автомобилей (уже в БД)
             - error (str): Текст ошибки (при неудаче)
 
     Raises:
@@ -67,13 +68,15 @@ def scrape_autoria(self):
 
         logger.info(
             f"Скрапинг AutoRia завершен. Обработано {stats.get('processed', 0)} автомобилей, "
-            f"добавлено {stats.get('saved', 0)} новых записей"
+            f"добавлено {stats.get('saved', 0)} новых записей, "
+            f"пропущено {stats.get('skipped', 0)} (уже в БД)"
         )
 
         return {
             "status": "success",
             "processed": stats.get("processed", 0),
             "saved": stats.get("saved", 0),
+            "skipped": stats.get("skipped", 0),
         }
 
     except Exception as e:
@@ -102,6 +105,7 @@ def manual_scrape(url=None):
             - status (str): "success" или "error"
             - processed (int): Количество обработанных автомобилей (при успехе)
             - saved (int): Количество сохраненных новых записей (при успехе)
+            - skipped (int): Количество пропущенных автомобилей (уже в БД)
             - url (str): Использованный URL-адрес
             - error (str): Текст ошибки (при неудаче)
 
@@ -126,13 +130,15 @@ def manual_scrape(url=None):
 
         logger.info(
             f"Ручной скрапинг завершен. Обработано {stats.get('processed', 0)} автомобилей, "
-            f"добавлено {stats.get('saved', 0)} новых записей"
+            f"добавлено {stats.get('saved', 0)} новых записей, "
+            f"пропущено {stats.get('skipped', 0)} (уже в БД)"
         )
 
         return {
             "status": "success",
             "processed": stats.get("processed", 0),
             "saved": stats.get("saved", 0),
+            "skipped": stats.get("skipped", 0),
             "url": start_url,
         }
 

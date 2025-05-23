@@ -13,8 +13,7 @@ Classes:
 from datetime import datetime
 
 from sqlalchemy import String  # type: ignore
-from sqlalchemy import (Column, DateTime, Integer,  # type: ignore
-                        UniqueConstraint)
+from sqlalchemy import Column, DateTime, Integer, UniqueConstraint  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base  # type: ignore
 
 Base = declarative_base()
