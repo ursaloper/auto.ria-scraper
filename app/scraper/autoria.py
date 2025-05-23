@@ -129,7 +129,7 @@ class AutoRiaScraper:
                 "url": car_data["url"],
                 "title": car_data.get("title"),
                 "price_usd": car_data.get("price_usd"),
-                "odometer": car_data.get("odometer"),
+                "odometer": car_data.get("odometer") or 0,
                 "username": car_data.get("username"),
                 "phone_number": phone_numbers_str,
                 "image_url": car_data.get("image_url"),
@@ -316,9 +316,9 @@ class AutoRiaScraper:
                                     )
                                     continue
 
-                                logger.info(
-                                    f"Обработка {len(car_tasks)+1}/{MAX_CARS_TO_PROCESS or 'неограничено'}: {car_url}"
-                                )
+                                #logger.info(
+                                #    f"Обработка {len(car_tasks)+1}/{MAX_CARS_TO_PROCESS or 'неограничено'}: {car_url}"
+                                #)
                                 task = asyncio.create_task(
                                     process_car(car_url, client, db)
                                 )
