@@ -1,17 +1,17 @@
 """
-Основной модуль для запуска скрапера auto.ria.com.
+Main module for launching the auto.ria.com scraper.
 
-Этот модуль содержит функцию точки входа в приложение, инициализирует базу данных
-и регистрирует обработчики сигналов для корректного завершения работы.
-В режиме Docker-контейнера сам скрапер запускается через задачи Celery,
-а эта функция используется для инициализации и тестирования.
+This module contains the application entry point function, initializes the database
+and registers signal handlers for proper shutdown.
+In Docker container mode, the scraper itself is launched through Celery tasks,
+and this function is used for initialization and testing.
 
 Attributes:
-    logger: Логгер для регистрации событий основного модуля.
+    logger: Logger for registering main module events.
 
 Functions:
-    signal_handler: Обработчик сигналов для корректного завершения работы.
-    main: Основная функция запуска приложения.
+    signal_handler: Signal handler for proper shutdown.
+    main: Main application startup function.
 """
 
 import signal
@@ -26,71 +26,71 @@ logger = get_logger(__name__)
 
 def signal_handler(signum: int, frame: Any) -> NoReturn:
     """
-    Обработчик сигналов для корректного завершения работы.
+    Signal handler for proper shutdown.
 
-    Перехватывает сигналы завершения (SIGINT, SIGTERM) и выполняет
-    корректное завершение работы приложения с логированием.
+    Intercepts termination signals (SIGINT, SIGTERM) and performs
+    proper application shutdown with logging.
 
     Args:
-        signum (int): Номер сигнала (например, SIGINT = 2, SIGTERM = 15).
-        frame (Any): Текущий фрейм выполнения (информация стека вызовов).
+        signum (int): Signal number (e.g., SIGINT = 2, SIGTERM = 15).
+        frame (Any): Current execution frame (call stack information).
 
     Returns:
-        NoReturn: Функция не возвращает значения, так как завершает процесс.
+        NoReturn: Function does not return values as it terminates the process.
 
     Note:
-        Функция вызывает sys.exit(0), что означает успешное завершение программы.
+        Function calls sys.exit(0), which means successful program termination.
     """
-    logger.info(f"Получен сигнал {signum}. Завершаем работу...")
+    logger.info(f"Received signal {signum}. Shutting down...")
     sys.exit(0)
 
 
 def main() -> None:
     """
-    Основная функция запуска скрапера.
+    Main scraper startup function.
 
-    Выполняет следующие операции:
-    1. Регистрирует обработчики сигналов для корректного завершения работы
-    2. Инициализирует базу данных (создает таблицы, если они не существуют)
-    3. Выводит информацию о командах для ручного запуска задач
+    Performs the following operations:
+    1. Registers signal handlers for proper shutdown
+    2. Initializes the database (creates tables if they don't exist)
+    3. Displays information about commands for manual task execution
 
     Returns:
         None
 
     Raises:
-        SystemExit: В случае критической ошибки вызывает sys.exit(1),
-                   что означает завершение с ошибкой.
+        SystemExit: In case of critical error calls sys.exit(1),
+                   which means termination with error.
 
     Examples:
-        >>> # Запуск приложения
+        >>> # Run application
         >>> main()
 
-        >>> # Ручной запуск скрапинга через Celery CLI
+        >>> # Manual scraping launch via Celery CLI
         >>> # celery -A app call app.tasks.scraping.manual_scrape
     """
-    # Регистрируем обработчики сигналов
+    # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
     try:
-        # Инициализация базы данных (создание таблиц)
-        logger.info("Инициализация базы данных...")
+        # Database initialization (table creation)
+        logger.info("Initializing database...")
         init_db()
 
-        # В режиме Docker-контейнера скрапер запускается через Celery
-        # Эта функция используется в основном для тестирования или ручного запуска
+        # In Docker container mode, scraper is launched through Celery
+        # This function is mainly used for testing or manual launch
         logger.info(
-            "Приложение готово к работе. Для запуска скрапинга используйте Celery-задачи"
+            "Application ready to work. Use Celery tasks to launch scraping"
         )
         logger.info(
-            "Для ручного запуска скрапинга используйте: celery -A app call app.tasks.scraping.manual_scrape"
+            "For manual scraping launch use: celery -A app call app.tasks.scraping.manual_scrape"
         )
         logger.info(
-            "Для ручного создания дампа используйте: celery -A app call app.tasks.backup.manual_backup"
+            "For manual dump creation use: celery -A app call app.tasks.backup.manual_backup"
         )
 
     except Exception as e:
-        logger.critical(f"Критическая ошибка: {str(e)}", exc_info=True)
+        logger.critical(f"Critical error: {str(e)}", exc_info=True)
         sys.exit(1)
 
 

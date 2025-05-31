@@ -1,19 +1,19 @@
 """
-Модуль для работы с базой данных.
+Module for working with the database.
 
-Этот модуль предоставляет функции и утилиты для инициализации, подключения
-и взаимодействия с базой данных PostgreSQL. Включает в себя функции для создания
-сессий, проверки соединения и инициализации схемы базы данных.
+This module provides functions and utilities for initializing, connecting
+and interacting with the PostgreSQL database. Includes functions for creating
+sessions, checking connections and initializing the database schema.
 
 Attributes:
-    logger: Логгер для регистрации событий, связанных с базой данных.
-    engine: Экземпляр SQLAlchemy Engine для подключения к базе данных.
-    SessionLocal: Фабрика сессий SQLAlchemy для создания объектов Session.
+    logger: Logger for registering database-related events.
+    engine: SQLAlchemy Engine instance for database connection.
+    SessionLocal: SQLAlchemy session factory for creating Session objects.
 
 Functions:
-    init_db: Инициализирует базу данных, создавая все необходимые таблицы.
-    get_db: Контекстный менеджер для работы с сессией базы данных.
-    check_connection: Проверяет соединение с базой данных.
+    init_db: Initializes the database, creating all necessary tables.
+    get_db: Context manager for working with database session.
+    check_connection: Checks database connection.
 """
 
 from contextlib import contextmanager
@@ -29,62 +29,62 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Создаем движок базы данных
+# Create database engine
 engine = create_engine(
     DATABASE_URL,
-    pool_size=5,  # Максимальное количество соединений в пуле
-    max_overflow=10,  # Максимальное количество соединений, которые могут быть созданы сверх pool_size
-    pool_timeout=30,  # Время ожидания доступного соединения в секундах
-    pool_recycle=1800,  # Переподключение через 30 минут для предотвращения разрыва соединения
+    pool_size=5,  # Maximum number of connections in pool
+    max_overflow=10,  # Maximum number of connections that can be created above pool_size
+    pool_timeout=30,  # Wait time for available connection in seconds
+    pool_recycle=1800,  # Reconnect after 30 minutes to prevent connection drops
 )
 
-# Создаем фабрику сессий
+# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db() -> None:
     """
-    Инициализация базы данных.
+    Database initialization.
 
-    Создает все таблицы, определенные в моделях, если они не существуют.
-    Использует метаданные из Base для определения схемы.
+    Creates all tables defined in models if they don't exist.
+    Uses metadata from Base to determine schema.
 
     Raises:
-        SQLAlchemyError: Если возникла ошибка при создании таблиц.
+        SQLAlchemyError: If an error occurred while creating tables.
 
     Examples:
         >>> init_db()
-        # Логирует "База данных успешно инициализирована" при успешном выполнении
+        # Logs "Database successfully initialized" on successful execution
     """
     try:
         Base.metadata.create_all(bind=engine)
-        logger.info("База данных успешно инициализирована")
+        logger.info("Database successfully initialized")
     except SQLAlchemyError as e:
-        logger.error("Ошибка при инициализации базы данных", exc_info=True)
+        logger.error("Error initializing database", exc_info=True)
         raise
 
 
 @contextmanager
 def get_db() -> Generator[Session, None, None]:
     """
-    Контекстный менеджер для работы с сессией базы данных.
+    Context manager for working with database session.
 
-    Создает новую сессию и автоматически управляет транзакциями,
-    выполняя commit при успешном выполнении или rollback при ошибке.
-    Также гарантирует закрытие сессии после использования.
+    Creates a new session and automatically manages transactions,
+    performing commit on successful execution or rollback on error.
+    Also ensures session closure after use.
 
     Yields:
-        Session: Сессия базы данных SQLAlchemy для выполнения операций.
+        Session: SQLAlchemy database session for performing operations.
 
     Raises:
-        SQLAlchemyError: При возникновении ошибок в операциях с базой данных.
+        SQLAlchemyError: When errors occur in database operations.
 
     Examples:
         >>> with get_db() as db:
         ...     car = Car(title="Toyota Camry", price_usd=15000)
         ...     db.add(car)
-        # Автоматически выполняет db.commit() при выходе из блока
-        # или db.rollback() при возникновении исключения
+        # Automatically performs db.commit() when exiting the block
+        # or db.rollback() when an exception occurs
     """
     db = SessionLocal()
     try:
@@ -92,7 +92,7 @@ def get_db() -> Generator[Session, None, None]:
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
-        logger.error("Ошибка при работе с базой данных", exc_info=True)
+        logger.error("Error working with database", exc_info=True)
         raise
     finally:
         db.close()
@@ -100,26 +100,26 @@ def get_db() -> Generator[Session, None, None]:
 
 def check_connection() -> bool:
     """
-    Проверка подключения к базе данных.
+    Database connection check.
 
-    Выполняет простой SQL-запрос для проверки доступности базы данных.
-    Логирует результат проверки.
+    Performs a simple SQL query to check database availability.
+    Logs the check result.
 
     Returns:
-        bool: True если подключение успешно установлено, False в противном случае.
+        bool: True if connection is successfully established, False otherwise.
 
     Examples:
         >>> is_connected = check_connection()
         >>> if is_connected:
-        ...     print("База данных доступна")
+        ...     print("Database is available")
         ... else:
-        ...     print("Ошибка подключения к базе данных")
+        ...     print("Database connection error")
     """
     try:
         with get_db() as db:
             db.execute("SELECT 1")
-            logger.info("Подключение к базе данных успешно")
+            logger.info("Database connection successful")
             return True
     except SQLAlchemyError as e:
-        logger.error("Ошибка подключения к базе данных", exc_info=True)
+        logger.error("Database connection error", exc_info=True)
         return False

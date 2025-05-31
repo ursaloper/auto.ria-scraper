@@ -1,15 +1,15 @@
 """
-Базовый класс асинхронного парсера.
+Base asynchronous parser class.
 
-Этот модуль предоставляет абстрактный базовый класс для всех парсеров в проекте.
-Определяет общий интерфейс и базовую функциональность, которую должны реализовывать
-все специализированные парсеры.
+This module provides an abstract base class for all parsers in the project.
+Defines common interface and basic functionality that should be implemented
+by all specialized parsers.
 
 Attributes:
-    logger: Логгер для регистрации событий парсинга.
+    logger: Logger for registering parsing events.
 
 Classes:
-    BaseScraper: Абстрактный базовый класс для всех парсеров.
+    BaseScraper: Abstract base class for all parsers.
 """
 
 from abc import ABC, abstractmethod
@@ -24,56 +24,56 @@ logger = get_logger(__name__)
 
 class BaseScraper(ABC):
     """
-    Базовый класс для асинхронных парсеров.
+    Base class for asynchronous parsers.
 
-    Определяет общий интерфейс и базовую функциональность для всех парсеров.
-    Наследники должны реализовать метод parse() для извлечения данных
-    из конкретных типов страниц.
+    Defines common interface and basic functionality for all parsers.
+    Inheritors must implement the parse() method to extract data
+    from specific types of pages.
 
     Methods:
-        get_soup: Создает объект BeautifulSoup из HTML-кода.
-        parse: Абстрактный метод для парсинга данных, должен быть реализован в наследниках.
+        get_soup: Creates BeautifulSoup object from HTML code.
+        parse: Abstract method for parsing data, must be implemented in inheritors.
     """
 
     @staticmethod
     def get_soup(html: str) -> BeautifulSoup:
         """
-        Создание объекта BeautifulSoup из HTML.
+        Create BeautifulSoup object from HTML.
 
-        Преобразует HTML-код в структуру данных BeautifulSoup для последующего
-        парсинга и извлечения информации. Использует парсер lxml для лучшей
-        производительности и надежности.
+        Converts HTML code into BeautifulSoup data structure for subsequent
+        parsing and information extraction. Uses lxml parser for better
+        performance and reliability.
 
         Args:
-            html (str): HTML-код страницы для парсинга.
+            html (str): Page HTML code for parsing.
 
         Returns:
-            BeautifulSoup: Объект BeautifulSoup для удобного парсинга HTML.
+            BeautifulSoup: BeautifulSoup object for convenient HTML parsing.
 
         Examples:
-            >>> html = "<html><body><h1>Заголовок</h1></body></html>"
+            >>> html = "<html><body><h1>Title</h1></body></html>"
             >>> soup = BaseScraper.get_soup(html)
             >>> soup.h1.text
-            'Заголовок'
+            'Title'
         """
         return BeautifulSoup(html, "lxml")
 
     @abstractmethod
     async def parse(self, *args, **kwargs) -> Dict[str, Any]:
         """
-        Абстрактный асинхронный метод парсинга.
+        Abstract asynchronous parsing method.
 
-        Должен быть реализован в дочерних классах для извлечения
-        данных из конкретных типов страниц.
+        Must be implemented in child classes to extract
+        data from specific types of pages.
 
         Args:
-            *args: Позиционные аргументы, специфичные для конкретного парсера.
-            **kwargs: Именованные аргументы, специфичные для конкретного парсера.
+            *args: Positional arguments specific to the concrete parser.
+            **kwargs: Named arguments specific to the concrete parser.
 
         Returns:
-            Dict[str, Any]: Словарь с извлеченными данными.
+            Dict[str, Any]: Dictionary with extracted data.
 
         Raises:
-            NotImplementedError: Если метод не переопределен в дочернем классе.
+            NotImplementedError: If method is not overridden in child class.
         """
         pass

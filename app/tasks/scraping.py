@@ -1,19 +1,19 @@
 """
-Celery-задачи для скрапинга auto.ria.com (асинхронный запуск).
+Celery tasks for auto.ria.com scraping (asynchronous launch).
 
-Этот модуль содержит задачи Celery для автоматического и ручного запуска
-процесса скрапинга данных с сайта auto.ria.com. Задачи используют асинхронный
-скрапер AutoRiaScraper и настроены на обработку ошибок с автоматическими
-повторными попытками при сбоях.
+This module contains Celery tasks for automatic and manual launch
+of data scraping process from auto.ria.com website. Tasks use asynchronous
+AutoRiaScraper and are configured for error handling with automatic
+retry attempts on failures.
 
 Attributes:
-    logger: Логгер для регистрации событий скрапинга.
-    celery_app: Экземпляр приложения Celery, импортируемый из конфигурации.
-    SCRAPER_START_URL: URL-адрес начальной страницы для скрапинга, импортируемый из настроек.
+    logger: Logger for registering scraping events.
+    celery_app: Celery application instance imported from configuration.
+    SCRAPER_START_URL: Starting page URL for scraping, imported from settings.
 
 Functions:
-    scrape_autoria: Задача для автоматического запуска скрапинга по расписанию.
-    manual_scrape: Задача для ручного запуска скрапинга с указанным URL.
+    scrape_autoria: Task for automatic scraping launch on schedule.
+    manual_scrape: Task for manual scraping launch with specified URL.
 """
 
 import asyncio
@@ -29,47 +29,47 @@ logger = get_logger(__name__)
 @celery_app.task(bind=True, max_retries=3, name="app.tasks.scraping.scrape_autoria")
 def scrape_autoria(self):
     """
-    Задача для запуска скрапинга auto.ria.com по расписанию.
+    Task for launching auto.ria.com scraping on schedule.
 
-    Выполняет полный процесс скрапинга данных с сайта auto.ria.com, начиная с
-    указанного в настройках URL-адреса. В случае ошибки пытается повторить
-    выполнение до трех раз с экспоненциальной задержкой между попытками.
+    Performs full data scraping process from auto.ria.com website, starting from
+    URL specified in settings. In case of error tries to repeat
+    execution up to three times with exponential delay between attempts.
 
     Args:
-        self: Экземпляр задачи Celery, предоставляемый декоратором bind=True.
-              Используется для доступа к контексту задачи и повторных попыток.
+        self: Celery task instance provided by bind=True decorator.
+              Used for accessing task context and retry attempts.
 
     Returns:
-        dict: Результат выполнения задачи в формате словаря со следующими ключами:
-            - status (str): "success" или "error"
-            - processed (int): Количество обработанных автомобилей (при успехе)
-            - saved (int): Количество сохраненных новых записей (при успехе)
-            - skipped (int): Количество пропущенных автомобилей (уже в БД)
-            - error (str): Текст ошибки (при неудаче)
+        dict: Task execution result in dictionary format with following keys:
+            - status (str): "success" or "error"
+            - processed (int): Number of processed cars (on success)
+            - saved (int): Number of saved new records (on success)
+            - skipped (int): Number of skipped cars (already in DB)
+            - error (str): Error text (on failure)
 
     Raises:
-        Exception: Любые исключения перехватываются и логируются,
-                  задача перезапускается с помощью self.retry()
+        Exception: Any exceptions are caught and logged,
+                  task is restarted using self.retry()
 
     Note:
-        Задача настроена на максимум 3 повторные попытки с экспоненциальной задержкой.
-        Каждая попытка увеличивает время ожидания: 60с, 120с, 240с.
+        Task is configured for maximum 3 retry attempts with exponential delay.
+        Each attempt increases wait time: 60s, 120s, 240s.
     """
-    logger.info("Запуск задачи скрапинга auto.ria.com")
+    logger.info("Starting auto.ria.com scraping task")
 
     try:
-        # Создаем и запускаем скрапер
+        # Create and run scraper
         scraper = AutoRiaScraper(
             start_url=SCRAPER_START_URL,
         )
 
-        # Запускаем скрапинг
+        # Run scraping
         stats = asyncio.run(scraper.run())
 
         logger.info(
-            f"Скрапинг AutoRia завершен. Обработано {stats.get('processed', 0)} автомобилей, "
-            f"добавлено {stats.get('saved', 0)} новых записей, "
-            f"пропущено {stats.get('skipped', 0)} (уже в БД)"
+            f"AutoRia scraping completed. Processed {stats.get('processed', 0)} cars, "
+            f"added {stats.get('saved', 0)} new records, "
+            f"skipped {stats.get('skipped', 0)} (already in DB)"
         )
 
         return {
@@ -80,8 +80,8 @@ def scrape_autoria(self):
         }
 
     except Exception as e:
-        logger.error(f"Ошибка при выполнении задачи скрапинга: {str(e)}", exc_info=True)
-        # Повторяем задачу при ошибке с экспоненциальной задержкой
+        logger.error(f"Error executing scraping task: {str(e)}", exc_info=True)
+        # Retry task on error with exponential delay
         self.retry(exc=e, countdown=60 * (2**self.request.retries))
 
         return {"status": "error", "error": str(e)}
@@ -90,48 +90,48 @@ def scrape_autoria(self):
 @celery_app.task(name="app.tasks.scraping.manual_scrape")
 def manual_scrape(url=None):
     """
-    Задача для ручного запуска скрапинга с указанного URL.
+    Task for manual scraping launch from specified URL.
 
-    Позволяет запустить процесс скрапинга вручную, с возможностью указать
-    произвольный начальный URL-адрес. В отличие от автоматической задачи,
-    не выполняет повторных попыток при ошибке.
+    Allows to start scraping process manually, with ability to specify
+    arbitrary starting URL. Unlike automatic task,
+    does not perform retry attempts on error.
 
     Args:
-        url (str, optional): URL-адрес для начала скрапинга.
-            Если не указан, используется URL по умолчанию из настроек приложения.
+        url (str, optional): URL for starting scraping.
+            If not specified, uses default URL from application settings.
 
     Returns:
-        dict: Результат выполнения задачи в формате словаря со следующими ключами:
-            - status (str): "success" или "error"
-            - processed (int): Количество обработанных автомобилей (при успехе)
-            - saved (int): Количество сохраненных новых записей (при успехе)
-            - skipped (int): Количество пропущенных автомобилей (уже в БД)
-            - url (str): Использованный URL-адрес
-            - error (str): Текст ошибки (при неудаче)
+        dict: Task execution result in dictionary format with following keys:
+            - status (str): "success" or "error"
+            - processed (int): Number of processed cars (on success)
+            - saved (int): Number of saved new records (on success)
+            - skipped (int): Number of skipped cars (already in DB)
+            - url (str): Used URL
+            - error (str): Error text (on failure)
 
     Examples:
-        >>> # Запуск с URL по умолчанию
+        >>> # Launch with default URL
         >>> result = manual_scrape.delay()
         >>>
-        >>> # Запуск с конкретным URL
+        >>> # Launch with specific URL
         >>> result = manual_scrape.delay("https://auto.ria.com/uk/car/mercedes-benz/")
     """
     start_url = url or SCRAPER_START_URL
-    logger.info(f"Запуск ручного скрапинга с URL: {start_url}")
+    logger.info(f"Starting manual scraping from URL: {start_url}")
 
     try:
-        # Создаем и запускаем скрапер
+        # Create and run scraper
         scraper = AutoRiaScraper(
             start_url=start_url,
         )
 
-        # Запускаем скрапинг
+        # Run scraping
         stats = asyncio.run(scraper.run())
 
         logger.info(
-            f"Ручной скрапинг завершен. Обработано {stats.get('processed', 0)} автомобилей, "
-            f"добавлено {stats.get('saved', 0)} новых записей, "
-            f"пропущено {stats.get('skipped', 0)} (уже в БД)"
+            f"Manual scraping completed. Processed {stats.get('processed', 0)} cars, "
+            f"added {stats.get('saved', 0)} new records, "
+            f"skipped {stats.get('skipped', 0)} (already in DB)"
         )
 
         return {
@@ -144,7 +144,7 @@ def manual_scrape(url=None):
 
     except Exception as e:
         logger.error(
-            f"Ошибка при выполнении ручного скрапинга: {str(e)}", exc_info=True
+            f"Error executing manual scraping: {str(e)}", exc_info=True
         )
 
         return {"status": "error", "error": str(e), "url": start_url}

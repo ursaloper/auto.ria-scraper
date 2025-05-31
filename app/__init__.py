@@ -1,18 +1,18 @@
 """
-Корневой пакет приложения AutoRiaScraper.
+Root package of the AutoRiaScraper application.
 
-Этот пакет содержит все компоненты приложения для сбора данных с сайта auto.ria.com,
-включая скрапер, задачи Celery, модели базы данных и утилиты.
+This package contains all application components for collecting data from the auto.ria.com website,
+including scraper, Celery tasks, database models and utilities.
 
-Структура пакета:
-    config: Конфигурационные модули (настройки, конфигурация Celery).
-    core: Базовые компоненты (модели данных, подключение к БД).
-    scraper: Компоненты для сбора данных (парсеры, скрапер).
-    tasks: Задачи Celery для автоматизации.
-    utils: Вспомогательные утилиты (логирование, дампы БД).
+Package structure:
+    config: Configuration modules (settings, Celery configuration).
+    core: Base components (data models, database connection).
+    scraper: Data collection components (parsers, scraper).
+    tasks: Celery tasks for automation.
+    utils: Helper utilities (logging, database dumps).
 
 Attributes:
-    celery_app: Экземпляр приложения Celery, импортируемый из конфигурации.
+    celery_app: Celery application instance imported from configuration.
 """
 
 from app.config.celery_config import celery_app

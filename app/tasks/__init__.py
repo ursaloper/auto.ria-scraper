@@ -1,11 +1,11 @@
 """
-Пакет задач Celery для скрапинга и создания бэкапов.
+Celery tasks package for scraping and backup creation.
 
-Этот пакет содержит задачи Celery, которые выполняются по расписанию
-или могут быть запущены вручную. Задачи предназначены для автоматизации
-процессов скрапинга данных с сайта auto.ria.com и создания резервных копий базы данных.
+This package contains Celery tasks that are executed on schedule
+or can be run manually. Tasks are designed to automate
+scraping processes from the auto.ria.com website and creating database backups.
 
-Модули:
-    scraping: Задачи для автоматического и ручного запуска скрапера auto.ria.com.
-    backup: Задачи для автоматического и ручного создания дампов базы данных.
+Modules:
+    scraping: Tasks for automatic and manual launch of auto.ria.com scraper.
+    backup: Tasks for automatic and manual creation of database dumps.
 """

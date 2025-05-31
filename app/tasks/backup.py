@@ -1,18 +1,18 @@
 """
-Celery-задачи для создания дампов базы данных.
+Celery tasks for creating database dumps.
 
-Этот модуль содержит задачи Celery для автоматического и ручного создания
-резервных копий (дампов) базы данных PostgreSQL. Задачи используют функции
-из модуля utils.db_dumper и настроены на обработку ошибок с автоматическими
-повторными попытками при сбоях.
+This module contains Celery tasks for automatic and manual creation
+of backup copies (dumps) of PostgreSQL database. Tasks use functions
+from utils.db_dumper module and are configured for error handling with automatic
+retry attempts on failures.
 
 Attributes:
-    logger: Логгер для регистрации событий резервного копирования.
-    celery_app: Экземпляр приложения Celery, импортируемый из конфигурации.
+    logger: Logger for registering backup events.
+    celery_app: Celery application instance imported from configuration.
 
 Functions:
-    create_db_dump: Задача для автоматического создания дампа БД по расписанию.
-    manual_backup: Задача для ручного создания дампа БД.
+    create_db_dump: Task for automatic DB dump creation on schedule.
+    manual_backup: Task for manual DB dump creation.
 """
 
 from app.config.celery_config import celery_app
@@ -25,51 +25,51 @@ logger = get_logger(__name__)
 @celery_app.task(bind=True, max_retries=3, name="app.tasks.backup.create_db_dump")
 def create_db_dump(self):
     """
-    Задача для создания дампа базы данных по расписанию.
+    Task for creating database dump on schedule.
 
-    Выполняет создание резервной копии базы данных PostgreSQL и удаляет
-    устаревшие резервные копии. В случае ошибки пытается повторить
-    выполнение до трех раз с экспоненциальной задержкой между попытками.
+    Performs creation of PostgreSQL database backup and removes
+    outdated backup copies. In case of error tries to repeat
+    execution up to three times with exponential delay between attempts.
 
     Args:
-        self: Экземпляр задачи Celery, предоставляемый декоратором bind=True.
-              Используется для доступа к контексту задачи и повторных попыток.
+        self: Celery task instance provided by bind=True decorator.
+              Used for accessing task context and retry attempts.
 
     Returns:
-        dict: Результат выполнения задачи в формате словаря со следующими ключами:
-            - status (str): "success" или "error"
-            - message (str): Сообщение о результате операции
-            - error (str): Текст ошибки (при неудаче)
+        dict: Task execution result in dictionary format with following keys:
+            - status (str): "success" or "error"
+            - message (str): Operation result message
+            - error (str): Error text (on failure)
 
     Raises:
-        Exception: Любые исключения перехватываются и логируются,
-                  задача перезапускается с помощью self.retry()
+        Exception: Any exceptions are caught and logged,
+                  task is restarted using self.retry()
 
     Note:
-        Задача настроена на максимум 3 повторные попытки с экспоненциальной задержкой.
-        После успешного создания дампа автоматически запускается очистка старых дампов.
+        Task is configured for maximum 3 retry attempts with exponential delay.
+        After successful dump creation, old dumps cleanup is automatically started.
     """
-    logger.info("Запуск задачи создания дампа базы данных")
+    logger.info("Starting database dump creation task")
 
     try:
-        # Создаем дамп
+        # Create dump
         success = create_dump()
 
-        # Очищаем старые дампы (по умолчанию хранятся 30 дней)
+        # Clean up old dumps (by default stored for 30 days)
         cleanup_old_dumps()
 
         if success:
-            logger.info("Дамп базы данных успешно создан")
-            return {"status": "success", "message": "Дамп базы данных создан успешно"}
+            logger.info("Database dump successfully created")
+            return {"status": "success", "message": "Database dump created successfully"}
         else:
-            logger.error("Не удалось создать дамп базы данных")
-            # Повторяем задачу при ошибке с экспоненциальной задержкой
+            logger.error("Failed to create database dump")
+            # Retry task on error with exponential delay
             self.retry(countdown=60 * (2**self.request.retries))
-            return {"status": "error", "message": "Не удалось создать дамп базы данных"}
+            return {"status": "error", "message": "Failed to create database dump"}
 
     except Exception as e:
-        logger.error(f"Ошибка при создании дампа базы данных: {str(e)}", exc_info=True)
-        # Повторяем задачу при ошибке с экспоненциальной задержкой
+        logger.error(f"Error creating database dump: {str(e)}", exc_info=True)
+        # Retry task on error with exponential delay
         self.retry(exc=e, countdown=60 * (2**self.request.retries))
 
         return {"status": "error", "error": str(e)}
@@ -78,40 +78,40 @@ def create_db_dump(self):
 @celery_app.task(name="app.tasks.backup.manual_backup")
 def manual_backup():
     """
-    Задача для ручного создания дампа базы данных.
+    Task for manual database dump creation.
 
-    Позволяет запустить процесс создания резервной копии базы данных вручную.
-    В отличие от автоматической задачи, не выполняет повторных попыток при ошибке
-    и не удаляет старые дампы.
+    Allows to start database backup creation process manually.
+    Unlike automatic task, does not perform retry attempts on error
+    and does not remove old dumps.
 
     Returns:
-        dict: Результат выполнения задачи в формате словаря со следующими ключами:
-            - status (str): "success" или "error"
-            - message (str): Сообщение о результате операции
-            - error (str): Текст ошибки (при неудаче)
+        dict: Task execution result in dictionary format with following keys:
+            - status (str): "success" or "error"
+            - message (str): Operation result message
+            - error (str): Error text (on failure)
 
     Examples:
-        >>> # Запуск задачи вручную
+        >>> # Launch task manually
         >>> result = manual_backup.delay()
         >>>
-        >>> # Проверка результата
+        >>> # Check result
         >>> if result.get()["status"] == "success":
-        ...     print("Резервная копия создана успешно")
+        ...     print("Backup created successfully")
     """
-    logger.info("Запуск ручного создания дампа базы данных")
+    logger.info("Starting manual database dump creation")
 
     try:
-        # Создаем дамп
+        # Create dump
         success = create_dump()
 
         if success:
-            logger.info("Дамп базы данных успешно создан")
-            return {"status": "success", "message": "Дамп базы данных создан успешно"}
+            logger.info("Database dump successfully created")
+            return {"status": "success", "message": "Database dump created successfully"}
         else:
-            logger.error("Не удалось создать дамп базы данных")
-            return {"status": "error", "message": "Не удалось создать дамп базы данных"}
+            logger.error("Failed to create database dump")
+            return {"status": "error", "message": "Failed to create database dump"}
 
     except Exception as e:
-        logger.error(f"Ошибка при ручном создании дампа: {str(e)}", exc_info=True)
+        logger.error(f"Error during manual dump creation: {str(e)}", exc_info=True)
 
         return {"status": "error", "error": str(e)}

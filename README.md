@@ -5,218 +5,258 @@
 [![Docker](https://img.shields.io/badge/Docker-ready-blue.svg)](https://www.docker.com/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-Высокопроизводительное асинхронное приложение для сбора данных о подержанных автомобилях с платформы auto.ria.com.
+> 📖 **[Русская версия документации](README_RU.md)**
 
-## 📋 Описание
+High-performance asynchronous application for collecting used car data from the auto.ria.com platform.
 
-AutoRia Scraper — это эффективный инструмент для сбора данных об автомобилях с сайта auto.ria.com. Приложение использует асинхронный подход на базе httpx+BeautifulSoup4 для максимальной производительности и экономии ресурсов.
+## 📋 Description
 
-### Собираемые данные:
-- 💰 Информация о ценах в USD
-- 🔍 Характеристики автомобилей (пробег, VIN-код, госномер)
-- 👤 Контактные данные продавцов (имя, телефон)
-- 🖼️ Информация о фотографиях и медиа-материалах
-- 📊 Дата и время обнаружения объявления скрапером
+AutoRia Scraper is an efficient tool for collecting car data from the auto.ria.com website. The application uses an asynchronous approach based on httpx+BeautifulSoup4 for maximum performance and resource efficiency.
 
-### Преимущества:
-- ⚡ **Высокая производительность** — асинхронные HTTP-запросы с httpx
-- 🔄 **Устойчивость** — автоматические повторные попытки при ошибках
-- 📈 **Масштабируемость** — настраиваемое количество одновременных запросов
-- 🧠 **Интеллектуальный сбор данных** — двухэтапный процесс сбора (основные данные + телефон)
-- 📝 **Подробное логирование** — отслеживание всех этапов сбора данных
-- 🗃️ **Автоматические бэкапы** — регулярное резервное копирование базы данных
+### Collected data:
+- 💰 Price information in USD
+- 🔍 Car characteristics (mileage, VIN code, license plate)
+- 👤 Seller contact information (name, phone)
+- 🖼️ Photo and media information
+- 📊 Date and time when the listing was discovered by the scraper
 
-## 🔧 Технологии
+### Advantages:
+- ⚡ **High performance** — asynchronous HTTP requests with httpx
+- 🔄 **Resilience** — automatic retry attempts on errors
+- 📈 **Scalability** — configurable number of concurrent requests
+- 🧠 **Intelligent data collection** — two-stage collection process (main data + phone)
+- 📝 **Detailed logging** — tracking all stages of data collection
+- 🗃️ **Automatic backups** — regular database backup
 
-- **Python 3.10** — современная версия языка программирования
-- **PostgreSQL** — надежная реляционная СУБД для хранения данных
-- **SQLAlchemy** — мощный ORM для работы с базой данных
-- **httpx** — асинхронный HTTP-клиент нового поколения
-- **BeautifulSoup4** — эффективный парсер HTML-страниц
-- **asyncio** — библиотека для асинхронного программирования
-- **Celery** — распределенная очередь задач для автоматизации процессов
-- **Docker & Docker Compose** — контейнеризация для простого развертывания
+## 🔧 Technologies
 
-## 📂 Структура проекта
+- **Python 3.10** — modern programming language version
+- **PostgreSQL** — reliable relational database for data storage
+- **SQLAlchemy** — powerful ORM for database operations
+- **httpx** — next-generation asynchronous HTTP client
+- **BeautifulSoup4** — efficient HTML page parser
+- **asyncio** — library for asynchronous programming
+- **Celery** — distributed task queue for process automation
+- **Docker & Docker Compose** — containerization for easy deployment
+
+## 📂 Project Structure
 
 ```
 ├── .dockerignore
-├── .env                # Переменные окружения (создайте вручную)
-├── .env.example        # Пример .env файла
+├── .env                # Environment variables (create manually)
+├── .env.example        # Example .env file
 ├── .gitignore
-├── Dockerfile          # Docker-образ приложения
-├── README.md           # Документация
-├── docker-compose.yml  # Docker Compose конфигурация
-├── requirements.txt    # Python зависимости
-├── tests/              # Тесты
-├── logs/               # Логи приложения
+├── Dockerfile          # Application Docker image
+├── README.md           # Documentation
+├── README_RU.md        # Russian documentation
+├── docker-compose.yml  # Docker Compose configuration
+├── requirements.txt    # Python dependencies
+├── tests/              # Tests
+├── logs/               # Application logs
 │   └── scraper.log
-├── dumps/              # Дампы базы данных
+├── dumps/              # Database dumps
 │   └── autoria_dump_YYYY-MM-DD_HH-MM-SS.sql
-└── app/                # Основной код приложения
+└── app/                # Main application code
     ├── __init__.py
-    ├── main.py         # Точка входа
-    ├── core/           # База данных и модели
+    ├── main.py         # Entry point
+    ├── core/           # Database and models
     │   ├── __init__.py
     │   ├── database.py
     │   └── models.py
-    ├── config/         # Конфигурация
+    ├── config/         # Configuration
     │   ├── __init__.py
     │   ├── celery_config.py
     │   └── settings.py
-    ├── utils/          # Утилиты
+    ├── utils/          # Utilities
     │   ├── __init__.py
     │   ├── db_dumper.py
     │   ├── db_utils.py
     │   └── logger.py
-    ├── scraper/        # Логика парсинга
+    ├── scraper/        # Parsing logic
     │   ├── __init__.py
-    │   ├── autoria.py  # Основной скрапер
-    │   ├── base.py     # Базовый класс скрапера
+    │   ├── autoria.py  # Main scraper
+    │   ├── base.py     # Base scraper class
     │   └── parsers/
-    │       ├── car_page.py    # Парсер страницы автомобиля
-    │       └── search_page.py # Парсер страницы поиска
-    └── tasks/          # Celery задачи
+    │       ├── car_page.py    # Car page parser
+    │       └── search_page.py # Search page parser
+    └── tasks/          # Celery tasks
         ├── __init__.py
-        ├── backup.py   # Задачи резервного копирования
-        └── scraping.py # Задачи сбора данных
+        ├── backup.py   # Backup tasks
+        └── scraping.py # Data collection tasks
 ```
 
-## 🚀 Установка и запуск
+## 🚀 Installation and Launch
 
-### Через Docker (рекомендуется)
+### Via Docker (recommended)
 
-1. Склонируйте репозиторий:
+1. Clone the repository:
 ```bash
 git clone https://github.com/ursaloper/auto.ria-scraper
 cd auto.ria-scraper
 ```
 
-2. Создайте файл .env на основе .env.example:
+2. Create .env file based on .env.example:
 ```bash
 cp .env.example .env
 ```
 
-3. Настройте переменные окружения в .env:
+3. Configure environment variables in .env:
 ```bash
 nano .env
 ```
 
-4. Запустите приложение:
+4. Launch the application:
 ```bash
 docker-compose up -d
 ```
 
-5. Просмотр логов:
+5. View logs:
 ```bash
 docker-compose logs -f
 ```
 
-### Локальная установка
+### Local Installation
 
-1. Создайте виртуальное окружение:
+1. Create virtual environment:
 ```bash
 python -m venv venv
 source venv/bin/activate  # Linux/MacOS
-# или
+# or
 venv\Scripts\activate     # Windows
 ```
 
-2. Установите зависимости:
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Настройте .env файл:
+3. Configure .env file:
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-4. Запустите приложение:
+4. Launch the application:
 ```bash
 python -m app.main
 ```
 
-## 🤖 Управление Celery
+## 🤖 Celery Management
 
-Для ручного запуска задач и мониторинга очереди используйте:
+For manual task execution and queue monitoring use:
 
-### Задачи скрапинга и бэкапа
+### Scraping and Backup Tasks
 
-- **Создать дамп базы данных вручную:**
+- **Create database dump manually:**
   ```bash
   docker-compose exec celery_worker celery -A app call app.tasks.backup.manual_backup
   ```
-- **Запустить скрапинг вручную:**
+- **Run scraping manually:**
   ```bash
   docker-compose exec celery_worker celery -A app call app.tasks.scraping.manual_scrape
   ```
-- **Запустить скрапинг с определенного URL:**
+- **Run scraping from specific URL:**
   ```bash
   docker-compose exec celery_worker celery -A app call app.tasks.scraping.manual_scrape --args='["https://auto.ria.com/uk/car/mercedes-benz/"]'
   ```
 
-### Мониторинг Celery
+### Celery Monitoring
 
-- **Показать зарегистрированные задачи:**
+- **Show registered tasks:**
   ```bash
   docker-compose exec celery_worker celery -A app inspect registered
   ```
-- **Показать задачи в очереди:**
+- **Show queued tasks:**
   ```bash
   docker-compose exec celery_worker celery -A app inspect reserved
   ```
-- **Показать активные задачи:**
+- **Show active tasks:**
   ```bash
   docker-compose exec celery_worker celery -A app inspect active
   ```
-- **Показать историю выполненных задач:**
+- **Show completed tasks history:**
   ```bash
   docker-compose exec celery_worker celery -A app inspect revoked
   ```
 
-## ⚙️ Конфигурация
+## ⚙️ Configuration
 
-Основные настройки находятся в файле `.env`:
+Main settings are located in the `.env` file:
 
-| Параметр | Описание | Пример |
-|----------|----------|--------|
-| `DATABASE_URL` | URL подключения к PostgreSQL | `postgresql://user:password@postgres:5432/autoria` |
-| `SCRAPING_TIME` | Время запуска сбора данных | `12:00` (каждый день в 12:00) |
-| `DUMP_TIME` | Время создания дампа БД | `00:00` (каждый день в 00:00) |
-| `AUTORIA_START_URL` | Начальная страница для сбора данных | `https://auto.ria.com/uk/car/used/` |
-| `MAX_PAGES_TO_PARSE` | Максимальное количество страниц для парсинга | `10` |
-| `MAX_CARS_TO_PROCESS` | Максимальное количество автомобилей для обработки | `100` |
-| `SCRAPER_CONCURRENCY` | Максимальное количество одновременных запросов | `5` |
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection URL | `postgresql://user:password@postgres:5432/autoria` |
+| `SCRAPER_START_TIME` | Data collection start time | `12:00` (daily at 12:00) |
+| `DUMP_TIME` | Database dump creation time | `00:00` (daily at 00:00) |
+| `SCRAPER_START_URL` | Starting page for data collection | `https://auto.ria.com/uk/car/used/` |
+| `MAX_PAGES_TO_PARSE` | Maximum number of pages to parse | `10` |
+| `MAX_CARS_TO_PROCESS` | Maximum number of cars to process | `100` |
+| `SCRAPER_CONCURRENCY` | Maximum number of concurrent requests | `5` |
 
-## 🚄 Производительность
+## 🚄 Performance
 
-Скорость работы парсера зависит от параметра `SCRAPER_CONCURRENCY`, который определяет количество одновременных запросов. На практике, из-за ограничений сайта auto.ria.com и задержек на стороне сервера, реальная скорость может отличаться от теоретической.
+Parser speed depends on the `SCRAPER_CONCURRENCY` parameter, which determines the number of concurrent requests. In practice, due to auto.ria.com site limitations and server-side delays, actual speed may differ from theoretical.
 
-**Тестовые результаты:**
-- Обработано: 500 автомобилей
-- Добавлено в БД: 495-496 новых записей
-- Время выполнения: ~6-7 минут (360-380 секунд)
-- Эффективность: 99% (процент успешно обработанных объявлений)
+**Test Results:**
+- Processed: 500 cars
+- Added to DB: 495-496 new records
+- Execution time: ~6-7 minutes (360-380 seconds)
+- Efficiency: 99% (percentage of successfully processed listings)
 
-> **Важно:**
-> - Увеличение `SCRAPER_CONCURRENCY` выше 5-7 практически не ускоряет сбор данных из-за ограничений сайта и задержек на стороне auto.ria.com.
-> - Слишком высокие значения могут привести к временной блокировке IP-адреса.
-> - Рекомендуется использовать значения 5-7 для стабильной и безопасной работы.
+> **Important:**
+> - Increasing `SCRAPER_CONCURRENCY` above 5-7 practically doesn't speed up data collection due to site limitations and delays on auto.ria.com side.
+> - Too high values may lead to temporary IP address blocking.
+> - Recommended to use values 5-7 for stable and safe operation.
 
-## 💾 Дампы базы данных
+## 💾 Database Dumps
 
-- Дампы создаются автоматически каждый день в указанное время
-- Хранятся в директории `dumps/`
-- Формат имени: `autoria_dump_YYYY-MM-DD_HH-MM-SS.sql`
-- Автоматическое удаление старых дампов (по умолчанию хранятся 30 дней)
+- Dumps are created automatically daily at specified time
+- Stored in `dumps/` directory
+- Filename format: `autoria_dump_YYYY-MM-DD_HH-MM-SS.sql`
+- Automatic deletion of old dumps (stored for 30 days by default)
 
-## 📊 Логирование
+## 📊 Logging
 
-Система логирования предоставляет детальную информацию о работе приложения:
+The logging system provides detailed information about application operation:
 
-- Все логи доступны в файле `logs/scraper.log`
-- Настроена ротация логов (максимальный размер файла: 10MB)
-- Ведется отдельное логирование для каждого модуля
-- Уровни логирования: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- All logs are available in `logs/scraper.log` file
+- Log rotation is configured (maximum file size: 10MB)
+- Separate logging for each module
+- Logging levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+## 🛠️ Development
+
+### Code Style
+
+The project uses [Black](https://github.com/psf/black) for code formatting:
+
+```bash
+# Format code
+black app/
+
+# Check formatting
+black --check app/
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📞 Support
+
+If you have questions or need help:
+
+- Create an [Issue](https://github.com/ursaloper/auto.ria-scraper/issues)
+- Check the [Russian documentation](README_RU.md)
+
+## ⭐ Star History
+
+If this project helped you, please give it a star! ⭐
