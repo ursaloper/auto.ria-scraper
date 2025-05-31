@@ -1,11 +1,11 @@
 """
-Пакет config содержит настройки приложения.
+The config package contains application settings.
 
-Этот пакет включает в себя все файлы конфигурации проекта AutoRiaScraper,
-предоставляя централизованный доступ к настройкам базы данных, Redis,
-Celery, логирования и параметрам скрапинга.
+This package includes all configuration files for the AutoRiaScraper project,
+providing centralized access to database, Redis, Celery, logging settings
+and scraping parameters.
 
-Модули:
-    settings: Основные настройки приложения, включая пути, параметры БД и логирования.
-    celery_config: Настройки Celery для планирования задач скрапинга и бэкапа.
+Modules:
+    settings: Main application settings, including paths, database and logging parameters.
+    celery_config: Celery settings for scheduling scraping and backup tasks.
 """

@@ -1,16 +1,16 @@
 """
-Парсер страницы поиска auto.ria.com (асинхронный, httpx+bs4).
+Auto.ria.com search page parser (asynchronous, httpx+bs4).
 
-Этот модуль реализует асинхронный парсер для извлечения списка ссылок на автомобили
-с страниц поиска auto.ria.com. Использует httpx для HTTP-запросов и BeautifulSoup для
-парсинга HTML. Поддерживает пагинацию и ограничение количества обрабатываемых страниц.
+This module implements an asynchronous parser for extracting car links list
+from auto.ria.com search pages. Uses httpx for HTTP requests and BeautifulSoup for
+HTML parsing. Supports pagination and limiting the number of processed pages.
 
 Attributes:
-    logger: Логгер для регистрации событий парсинга.
-    SCRAPER_START_URL: URL-адрес начальной страницы для скрапинга (из настроек).
+    logger: Logger for registering parsing events.
+    SCRAPER_START_URL: Starting page URL for scraping (from settings).
 
 Classes:
-    SearchPageParser: Парсер для страниц поиска auto.ria.com.
+    SearchPageParser: Parser for auto.ria.com search pages.
 """
 
 import asyncio
@@ -30,37 +30,37 @@ logger = get_logger(__name__)
 
 class SearchPageParser(BaseScraper):
     """
-    Асинхронный парсер для извлечения данных со страницы поиска AutoRia.
+    Asynchronous parser for extracting data from AutoRia search page.
 
-    Извлекает ссылки на страницы автомобилей с страниц результатов поиска.
-    Поддерживает пагинацию для обработки многостраничных результатов поиска.
+    Extracts links to car pages from search result pages.
+    Supports pagination for processing multi-page search results.
 
     Attributes:
-        current_page (int): Текущий номер страницы поиска (начиная с 0).
-        base_url (str): Базовый URL сайта AutoRia.
+        current_page (int): Current search page number (starting from 0).
+        base_url (str): AutoRia website base URL.
     """
 
     def __init__(self):
         """
-        Инициализация парсера страниц поиска.
+        Initialize search page parser.
 
-        Устанавливает начальные значения для счетчика страниц и базового URL.
+        Sets initial values for page counter and base URL.
         """
-        self.current_page = 0  # Начинаем с page=0
+        self.current_page = 0  # Start with page=0
         self.base_url = "https://auto.ria.com"
 
     def _extract_car_links(self, soup: BeautifulSoup) -> List[str]:
         """
-        Извлечение ссылок на страницы автомобилей.
+        Extract links to car pages.
 
-        Находит и извлекает ссылки на страницы с детальной информацией
-        об автомобилях из HTML-кода страницы поиска.
+        Finds and extracts links to pages with detailed car information
+        from search page HTML code.
 
         Args:
-            soup (BeautifulSoup): Объект BeautifulSoup с HTML-кодом страницы поиска.
+            soup (BeautifulSoup): BeautifulSoup object with search page HTML code.
 
         Returns:
-            List[str]: Список URL-адресов страниц автомобилей.
+            List[str]: List of car page URLs.
         """
         car_links = []
         ticket_items = soup.select("section.ticket-item")
@@ -70,34 +70,34 @@ class SearchPageParser(BaseScraper):
                 car_links.append(link_tag["href"])
 
         page_str = (
-            f"на странице {self.current_page}"
+            f"on page {self.current_page}"
             if self.current_page > 0
-            else "на первой странице"
+            else "on first page"
         )
-        logger.info(f"Найдено {len(car_links)} ссылок на автомобили {page_str}")
+        logger.info(f"Found {len(car_links)} car links {page_str}")
         return car_links
 
     def _get_next_page_url(self, current_url: str) -> str:
         """
-        Генерирует URL следующей страницы путем увеличения параметра page.
+        Generate next page URL by incrementing page parameter.
 
-        Анализирует текущий URL, увеличивает номер страницы в параметре page
-        и формирует новый URL для следующей страницы результатов поиска.
+        Analyzes current URL, increments page number in page parameter
+        and forms new URL for next search results page.
 
         Args:
-            current_url (str): URL текущей страницы поиска.
+            current_url (str): Current search page URL.
 
         Returns:
-            str: URL следующей страницы поиска.
+            str: Next search page URL.
 
         Note:
-            Просто увеличивает номер страницы на 1, независимо от общего количества страниц.
+            Simply increments page number by 1, regardless of total page count.
         """
-        # Парсим текущий URL
+        # Parse current URL
         parsed_url = urlparse(current_url)
         query_params = parse_qs(parsed_url.query)
 
-        # Определяем текущий номер страницы из URL
+        # Determine current page number from URL
         current_page_num = 0
         if "page" in query_params and query_params["page"]:
             try:
@@ -105,39 +105,39 @@ class SearchPageParser(BaseScraper):
             except (ValueError, IndexError):
                 current_page_num = 0
 
-        # Увеличиваем номер страницы на 1
+        # Increment page number by 1
         next_page = current_page_num + 1
         query_params["page"] = [str(next_page)]
 
-        # Собираем новый URL
+        # Build new URL
         new_query = urlencode(query_params, doseq=True)
         next_url_parts = list(parsed_url)
         next_url_parts[4] = new_query
         next_url = urlunparse(next_url_parts)
-        logger.info(f"Сгенерирован URL для страницы {next_page}: {next_url}")
+        logger.info(f"Generated URL for page {next_page}: {next_url}")
         return next_url
 
     async def parse_page(self, url: str, client: httpx.AsyncClient) -> Dict[str, Any]:
         """
-        Парсинг одной страницы поиска.
+        Parse single search page.
 
-        Выполняет HTTP-запрос к указанному URL, извлекает ссылки на автомобили
-        и формирует URL для следующей страницы поиска.
+        Makes HTTP request to specified URL, extracts car links
+        and forms URL for next search page.
 
         Args:
-            url (str): URL страницы поиска для парсинга.
-            client (httpx.AsyncClient): HTTP-клиент для выполнения запросов.
+            url (str): Search page URL for parsing.
+            client (httpx.AsyncClient): HTTP client for making requests.
 
         Returns:
-            Dict[str, Any]: Словарь с результатами парсинга, содержащий:
-                - car_links (List[str]): Список ссылок на страницы автомобилей.
-                - next_page_url (Optional[str]): URL следующей страницы или None,
-                  если ссылки не найдены (конец списка).
+            Dict[str, Any]: Dictionary with parsing results containing:
+                - car_links (List[str]): List of car page links.
+                - next_page_url (Optional[str]): Next page URL or None
+                  if no links found (end of list).
 
         Raises:
-            Exception: Перехватывает и логирует все исключения при запросе HTML.
+            Exception: Catches and logs all exceptions during HTML request.
         """
-        # Обновляем текущую страницу на основе URL
+        # Update current page based on URL
         parsed_url = urlparse(url)
         query_params = parse_qs(parsed_url.query)
         if "page" in query_params and query_params["page"]:
@@ -146,7 +146,7 @@ class SearchPageParser(BaseScraper):
             except (ValueError, IndexError):
                 self.current_page = 0
 
-        logger.info(f"Парсинг страницы поиска: {url} (страница {self.current_page})")
+        logger.info(f"Parsing search page: {url} (page {self.current_page})")
         max_retries = 3
         retry_count = 0
 
@@ -161,33 +161,33 @@ class SearchPageParser(BaseScraper):
                     retry_count += 1
                     wait_time = (
                         5 + random.randint(1, 5) * retry_count
-                    )  # Увеличиваем время ожидания с каждой попыткой
+                    )  # Increase wait time with each attempt
                     logger.warning(
-                        f"Получен статус 503 для {url}. Повторная попытка {retry_count}/{max_retries} через {wait_time} сек."
+                        f"Received 503 status for {url}. Retry {retry_count}/{max_retries} in {wait_time} sec."
                     )
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.error(f"Не удалось получить HTML для URL: {url}: {e}")
+                    logger.error(f"Failed to get HTML for URL: {url}: {e}")
                     return {"car_links": [], "next_page_url": None}
             except Exception as e:
-                logger.error(f"Не удалось получить HTML для URL: {url}: {e}")
+                logger.error(f"Failed to get HTML for URL: {url}: {e}")
                 return {"car_links": [], "next_page_url": None}
         else:
-            # Если все попытки исчерпаны
-            logger.error(f"Исчерпаны все попытки получения HTML для URL: {url}")
+            # If all attempts exhausted
+            logger.error(f"All attempts exhausted for getting HTML for URL: {url}")
             return {"car_links": [], "next_page_url": None}
 
         soup = self.get_soup(html)
         car_links = self._extract_car_links(soup)
 
-        # Если на странице нет объявлений, считаем что достигли конца
+        # If no ads on page, consider we reached the end
         if not car_links:
             logger.info(
-                f"На странице {self.current_page} не найдено объявлений. Достигнут конец списка."
+                f"No ads found on page {self.current_page}. Reached end of list."
             )
             return {"car_links": [], "next_page_url": None}
 
-        # Всегда генерируем URL следующей страницы
+        # Always generate next page URL
         next_page_url = self._get_next_page_url(url)
         return {"car_links": car_links, "next_page_url": next_page_url}
 
@@ -199,79 +199,79 @@ class SearchPageParser(BaseScraper):
         client: Optional[httpx.AsyncClient] = None,
     ) -> List[str]:
         """
-        Основной метод для парсинга страниц поиска AutoRia.
+        Main method for parsing AutoRia search pages.
 
-        Выполняет последовательный парсинг страниц поиска, начиная с указанного URL,
-        и собирает ссылки на страницы автомобилей. Поддерживает ограничение по
-        количеству страниц и общему количеству собираемых ссылок.
+        Performs sequential parsing of search pages starting from specified URL,
+        and collects car page links. Supports limiting by
+        page count and total number of collected links.
 
         Args:
-            start_url (str, optional): URL начальной страницы поиска.
-                По умолчанию используется URL из настроек приложения.
-            max_pages (Optional[int], optional): Максимальное количество страниц для парсинга.
-                None означает отсутствие ограничения.
-            max_cars (Optional[int], optional): Максимальное количество ссылок на автомобили.
-                None означает отсутствие ограничения.
-            client (Optional[httpx.AsyncClient], optional): HTTP-клиент для выполнения запросов.
-                Если не указан, создается новый клиент, который закрывается после использования.
+            start_url (str, optional): Starting search page URL.
+                By default uses URL from application settings.
+            max_pages (Optional[int], optional): Maximum number of pages to parse.
+                None means no limit.
+            max_cars (Optional[int], optional): Maximum number of car links.
+                None means no limit.
+            client (Optional[httpx.AsyncClient], optional): HTTP client for making requests.
+                If not specified, creates new client that closes after use.
 
         Returns:
-            List[str]: Список URL-адресов страниц автомобилей.
+            List[str]: List of car page URLs.
 
         Note:
-            Метод делает паузу в 1 секунду между запросами к страницам поиска.
+            Method makes 1 second pause between search page requests.
         """
         all_car_links = []
         current_url: Optional[str] = start_url
-        pages_processed = 0  # Счетчик обработанных страниц
+        pages_processed = 0  # Processed pages counter
         close_client = False
         if client is None:
             client = httpx.AsyncClient()
             close_client = True
         try:
             while current_url:
-                # Проверяем лимит страниц
+                # Check page limit
                 if max_pages and pages_processed >= max_pages:
-                    logger.info(f"Достигнут лимит в {max_pages} страниц.")
+                    logger.info(f"Reached limit of {max_pages} pages.")
                     break
 
                 page_data = await self.parse_page(current_url, client)
                 all_car_links.extend(page_data["car_links"])
                 next_url = page_data["next_page_url"]
 
-                # Увеличиваем счетчик обработанных страниц
+                # Increment processed pages counter
                 pages_processed += 1
 
                 if next_url:
-                    logger.info(f"Переход на следующую страницу: {next_url}")
+                    logger.info(f"Moving to next page: {next_url}")
                     current_url = next_url
-                    await asyncio.sleep(1)  # Пауза между страницами
+                    await asyncio.sleep(1)  # Pause between pages
                 else:
-                    logger.info("Достигнута последняя страница поиска.")
+                    logger.info("Reached last search page.")
                     break
         finally:
             if close_client:
                 await client.aclose()
 
-        # Ограничиваем общее количество ссылок, если max_cars задан
+        # Limit total number of links if max_cars is set
         if max_cars:
             all_car_links = all_car_links[:max_cars]
             logger.info(
-                f"Ограничено {len(all_car_links)} ссылок на автомобили по max_cars={max_cars}"
+                f"Limited to {len(all_car_links)} car links by max_cars={max_cars}"
             )
 
-        logger.info(f"Всего найдено {len(all_car_links)} ссылок на автомобили.")
+        logger.info(f"Total found {len(all_car_links)} car links.")
         return all_car_links
 
 
-# Пример использования (для тестирования)
+# Usage example (for testing)
 if __name__ == "__main__":
     parser = SearchPageParser()
-    links = parser.parse(max_pages=2)  # Парсим не более 2 страниц для теста
+    links = parser.parse(max_pages=2)  # Parse no more than 2 pages for test
 
     if links:
-        logger.info(f"Первые 5 найденных ссылок:")
+        logger.info(f"First 5 found links:")
         for link in links[:5]:
             logger.info(link)
     else:
-        logger.info("Ссылки не найдены.")
+        logger.info("No links found.")

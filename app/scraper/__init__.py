@@ -1,16 +1,16 @@
 """
-Пакет scraper содержит компоненты для сбора данных.
+The scraper package contains data collection components.
 
-Этот пакет реализует функциональность асинхронного скрапинга данных с сайта auto.ria.com.
-Включает в себя базовые классы и специализированные парсеры для различных типов страниц.
-Реализация использует комбинацию httpx для HTTP-запросов и BeautifulSoup для парсинга HTML.
+This package implements asynchronous data scraping functionality from the auto.ria.com website.
+Includes base classes and specialized parsers for different types of pages.
+Implementation uses a combination of httpx for HTTP requests and BeautifulSoup for HTML parsing.
 
-Модули:
-    base: Базовый абстрактный класс для всех парсеров.
-    autoria: Основной класс скрапера для сайта auto.ria.com.
+Modules:
+    base: Abstract base class for all parsers.
+    autoria: Main scraper class for the auto.ria.com website.
 
-Подпакеты:
-    parsers: Специализированные парсеры для различных типов страниц:
-        - search_page: Парсер страницы поиска (списка объявлений).
-        - car_page: Парсер страницы с детальной информацией об автомобиле.
+Subpackages:
+    parsers: Specialized parsers for different types of pages:
+        - search_page: Search page parser (ad listings).
+        - car_page: Parser for detailed car information page.
 """

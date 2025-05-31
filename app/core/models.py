@@ -1,13 +1,13 @@
 """
-Модели данных для работы с базой данных.
+Data models for working with the database.
 
-Этот модуль содержит определения ORM-моделей SQLAlchemy для хранения
-и управления данными, собранными скрапером auto.ria.com. Основная модель - Car,
-которая представляет автомобиль с сайта auto.ria.com.
+This module contains SQLAlchemy ORM model definitions for storing
+and managing data collected by the auto.ria.com scraper. The main model is Car,
+which represents a car from the auto.ria.com website.
 
 Classes:
-    Base: Базовый класс для всех ORM-моделей SQLAlchemy.
-    Car: Модель для хранения информации об автомобилях.
+    Base: Base class for all SQLAlchemy ORM models.
+    Car: Model for storing car information.
 """
 
 from datetime import datetime
@@ -21,29 +21,29 @@ Base = declarative_base()
 
 class Car(Base):
     """
-    Модель для хранения информации об автомобилях.
+    Model for storing car information.
 
-    Содержит всю необходимую информацию о каждом автомобиле, собранную скрапером
-    с сайта AutoRia. Включает уникальный URL, информацию о ценах, контактные данные
-    продавца, данные о пробеге и идентификационную информацию автомобиля.
+    Contains all necessary information about each car collected by the scraper
+    from the AutoRia website. Includes unique URL, price information, seller contact data,
+    mileage data and car identification information.
 
     Attributes:
-        id (int): Уникальный идентификатор записи в базе данных.
-        url (str): URL страницы автомобиля на сайте AutoRia. Индексируется и должен быть уникальным.
-        title (str): Заголовок объявления, обычно содержит марку, модель и год выпуска.
-        price_usd (int): Цена автомобиля в долларах США.
-        odometer (int): Пробег автомобиля в километрах.
-        username (str): Имя продавца или название компании.
-        phone_number (str): Номер телефона продавца в международном формате.
-        image_url (str): URL основного изображения автомобиля.
-        images_count (int): Общее количество изображений в объявлении.
-        car_number (str): Государственный регистрационный номер автомобиля, если доступен.
-        car_vin (str): VIN-код автомобиля для его идентификации. Индексируется.
-        datetime_found (datetime): Дата и время, когда объявление было найдено и сохранено.
+        id (int): Unique record identifier in the database.
+        url (str): Car page URL on AutoRia website. Indexed and must be unique.
+        title (str): Ad title, usually contains brand, model and year.
+        price_usd (int): Car price in US dollars.
+        odometer (int): Car mileage in kilometers.
+        username (str): Seller name or company name.
+        phone_number (str): Seller phone number in international format.
+        image_url (str): Main car image URL.
+        images_count (int): Total number of images in the ad.
+        car_number (str): Car license plate number, if available.
+        car_vin (str): Car VIN code for identification. Indexed.
+        datetime_found (datetime): Date and time when the ad was found and saved.
 
     Note:
-        Созданы уникальные ограничения для URL и VIN-кода для предотвращения дублирования.
-        Поля url и car_vin индексируются для ускорения поиска.
+        Unique constraints are created for URL and VIN code to prevent duplication.
+        The url and car_vin fields are indexed to speed up searches.
     """
 
     __tablename__ = "cars"
@@ -52,18 +52,18 @@ class Car(Base):
     url = Column(String, unique=True, nullable=False, index=True)
     title = Column(String, nullable=False)
     price_usd = Column(Integer, nullable=False)
-    odometer = Column(Integer, nullable=True)  # Хранится в километрах
+    odometer = Column(Integer, nullable=True)  # Stored in kilometers
     username = Column(String, nullable=False)
     phone_number = Column(
         String, nullable=False
-    )  # Храним как строку для сохранения формата +38063...
+    )  # Store as string to preserve format +380...
     image_url = Column(String)
     images_count = Column(Integer, default=0)
     car_number = Column(String)
     car_vin = Column(String, index=True)
     datetime_found = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Создаем индексы для часто используемых полей
+    # Create indexes for frequently used fields
     __table_args__ = (
         UniqueConstraint("url", name="uq_car_url"),
         UniqueConstraint("car_vin", name="uq_car_vin"),
@@ -71,9 +71,9 @@ class Car(Base):
 
     def __repr__(self):
         """
-        Строковое представление модели.
+        String representation of the model.
 
         Returns:
-            str: Строка, содержащая ID, заголовок и VIN автомобиля.
+            str: String containing car ID, title and VIN.
         """
         return f"<Car(id={self.id}, title='{self.title}', vin='{self.car_vin}')>"

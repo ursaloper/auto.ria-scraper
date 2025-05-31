@@ -1,21 +1,21 @@
 """
-Модуль для создания дампов базы данных.
+Module for creating database dumps.
 
-Этот модуль предоставляет функции для создания резервных копий (дампов)
-базы данных PostgreSQL и управления их хранением. Включает создание дампов
-в формате SQL и автоматическую очистку старых резервных копий.
+This module provides functions for creating backup copies (dumps)
+of PostgreSQL database and managing their storage. Includes creating dumps
+in SQL format and automatic cleanup of old backup copies.
 
-Использует внешнюю утилиту pg_dump для создания резервных копий,
-поэтому требует доступа к командной строке и наличия PostgreSQL клиента.
+Uses external pg_dump utility for creating backups,
+so requires command line access and PostgreSQL client availability.
 
 Attributes:
-    logger: Логгер для регистрации событий, связанных с созданием дампов.
-    DUMPS_DIR: Директория для хранения дампов, импортируемая из настроек.
-    POSTGRES_*: Параметры подключения к базе данных, импортируемые из настроек.
+    logger: Logger for registering events related to dump creation.
+    DUMPS_DIR: Directory for storing dumps, imported from settings.
+    POSTGRES_*: Database connection parameters, imported from settings.
 
 Functions:
-    create_dump: Создает дамп базы данных с текущей датой в имени файла.
-    cleanup_old_dumps: Удаляет дампы, созданные ранее указанного срока.
+    create_dump: Creates database dump with current date in filename.
+    cleanup_old_dumps: Removes dumps created before specified period.
 """
 
 import os
@@ -37,36 +37,36 @@ logger = get_logger(__name__)
 
 def create_dump() -> bool:
     """
-    Создает дамп базы данных PostgreSQL.
+    Creates PostgreSQL database dump.
 
-    Формирует имя файла дампа с текущей датой и временем, затем использует
-    утилиту pg_dump для создания резервной копии базы данных в формате SQL.
-    Параметры подключения к базе данных берутся из настроек приложения.
+    Forms dump filename with current date and time, then uses
+    pg_dump utility to create database backup in SQL format.
+    Database connection parameters are taken from application settings.
 
     Returns:
-        bool: True если дамп создан успешно, False в случае ошибки.
+        bool: True if dump created successfully, False on error.
 
     Raises:
-        Exception: Ловит и логирует любые исключения, возникающие в процессе.
+        Exception: Catches and logs any exceptions occurring in the process.
 
     Examples:
         >>> success = create_dump()
         >>> if success:
-        ...     print("Дамп успешно создан")
+        ...     print("Dump successfully created")
         ... else:
-        ...     print("Ошибка при создании дампа")
+        ...     print("Error creating dump")
 
     Note:
-        Функция требует наличия утилиты pg_dump в системе.
-        Путь для сохранения дампа создается автоматически на основе DUMPS_DIR.
-        Имя файла содержит префикс 'autoria_dump_' и текущую дату/время.
+        Function requires pg_dump utility availability in the system.
+        Save path for dump is created automatically based on DUMPS_DIR.
+        Filename contains prefix 'autoria_dump_' and current date/time.
     """
     try:
-        # Формируем имя файла с текущей датой
+        # Form filename with current date
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         dump_file = DUMPS_DIR / f"autoria_dump_{timestamp}.sql"
 
-        # Формируем команду для создания дампа
+        # Form command for creating dump
         cmd = [
             "pg_dump",
             "-h",
@@ -83,66 +83,66 @@ def create_dump() -> bool:
             str(dump_file),
         ]
 
-        # Устанавливаем переменную окружения для пароля
+        # Set environment variable for password
         env = os.environ.copy()
         env["PGPASSWORD"] = POSTGRES_PASSWORD
 
-        # Выполняем команду
+        # Execute command
         process = subprocess.run(cmd, env=env, capture_output=True, text=True)
 
         if process.returncode == 0:
-            logger.info(f"Дамп базы данных успешно создан: {dump_file}")
+            logger.info(f"Database dump successfully created: {dump_file}")
             return True
         else:
-            logger.error(f"Ошибка при создании дампа: {process.stderr}")
+            logger.error(f"Error creating dump: {process.stderr}")
             return False
 
     except Exception as e:
-        logger.error("Ошибка при создании дампа базы данных", exc_info=True)
+        logger.error("Error creating database dump", exc_info=True)
         return False
 
 
 def cleanup_old_dumps(days_to_keep: int = 30) -> None:
     """
-    Удаляет старые дампы базы данных.
+    Removes old database dumps.
 
-    Просматривает директорию с дампами и удаляет файлы,
-    которые были созданы ранее указанного количества дней назад.
-    Распознает только файлы с префиксом 'autoria_dump_' и расширением '.sql'.
+    Scans dumps directory and removes files
+    that were created before specified number of days ago.
+    Recognizes only files with prefix 'autoria_dump_' and extension '.sql'.
 
     Args:
-        days_to_keep (int, optional): Количество дней, за которые нужно хранить дампы.
-                                    По умолчанию 30 дней.
+        days_to_keep (int, optional): Number of days to keep dumps.
+                                    Default is 30 days.
 
     Raises:
-        Exception: Ловит и логирует любые исключения, возникающие в процессе.
+        Exception: Catches and logs any exceptions occurring in the process.
 
     Examples:
-        >>> # Удалить дампы старше 14 дней
+        >>> # Remove dumps older than 14 days
         >>> cleanup_old_dumps(14)
         >>>
-        >>> # Использовать значение по умолчанию (30 дней)
+        >>> # Use default value (30 days)
         >>> cleanup_old_dumps()
 
     Note:
-        Дата создания файла определяется по времени последнего изменения файла.
-        Удаление выполняется безвозвратно, без возможности восстановления.
+        File creation date is determined by file's last modification time.
+        Deletion is performed permanently, without recovery possibility.
     """
     try:
-        # Получаем список всех файлов в директории
+        # Get list of all files in directory
         dump_files = list(DUMPS_DIR.glob("autoria_dump_*.sql"))
 
-        # Текущая дата
+        # Current date
         now = datetime.now()
 
         for dump_file in dump_files:
-            # Получаем дату создания файла
+            # Get file creation date
             file_time = datetime.fromtimestamp(dump_file.stat().st_mtime)
 
-            # Если файл старше days_to_keep дней, удаляем его
+            # If file is older than days_to_keep days, remove it
             if (now - file_time).days > days_to_keep:
                 dump_file.unlink()
-                logger.info(f"Удален старый дамп: {dump_file}")
+                logger.info(f"Removed old dump: {dump_file}")
 
     except Exception as e:
-        logger.error("Ошибка при очистке старых дампов", exc_info=True)
+        logger.error("Error cleaning up old dumps", exc_info=True)

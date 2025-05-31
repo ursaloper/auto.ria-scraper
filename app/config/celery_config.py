@@ -1,27 +1,27 @@
 """
-Настройки Celery для управления задачами скрапинга.
+Celery settings for managing scraping tasks.
 
-Этот модуль инициализирует и настраивает экземпляр Celery для планирования
-и выполнения задач скрапинга и резервного копирования данных.
-Настройки загружаются из модуля settings.py.
+This module initializes and configures a Celery instance for scheduling
+and executing scraping and backup tasks.
+Settings are loaded from the settings.py module.
 
-Модуль автоматически создает два периодических задания:
-1. Ежедневный скрапинг данных с AutoRia в указанное время
-2. Ежедневное резервное копирование базы данных в указанное время
+The module automatically creates two periodic tasks:
+1. Daily data scraping from AutoRia at specified time
+2. Daily database backup at specified time
 
 Attributes:
-    celery_app (Celery): Экземпляр приложения Celery, сконфигурированный
-        для работы с проектом AutoRiaScraper.
+    celery_app (Celery): Celery application instance configured
+        to work with the AutoRiaScraper project.
 
-    scraper_hour (int): Час запуска скрапера, извлекается из SCRAPER_START_TIME.
-    scraper_minute (int): Минута запуска скрапера, извлекается из SCRAPER_START_TIME.
-    dump_hour (int): Час запуска резервного копирования, извлекается из DUMP_TIME.
-    dump_minute (int): Минута запуска резервного копирования, извлекается из DUMP_TIME.
+    scraper_hour (int): Scraper start hour, extracted from SCRAPER_START_TIME.
+    scraper_minute (int): Scraper start minute, extracted from SCRAPER_START_TIME.
+    dump_hour (int): Backup start hour, extracted from DUMP_TIME.
+    dump_minute (int): Backup start minute, extracted from DUMP_TIME.
 
 Note:
-    Для работы Celery требуется запущенный Redis сервер, указанный в настройках.
-    Часовой пояс по умолчанию установлен 'Europe/Kiev'.
-    Worker настроен на перезапуск после каждой задачи, чтобы избежать утечек памяти.
+    Celery requires a running Redis server specified in settings.
+    Default timezone is set to 'Europe/Kiev'.
+    Worker is configured to restart after each task to avoid memory leaks.
 """
 
 from celery import Celery
@@ -34,7 +34,7 @@ from app.config.settings import (
     SCRAPER_START_TIME,
 )
 
-# Создаем экземпляр Celery
+# Create Celery instance
 celery_app = Celery(
     "autoria_scraper",
     broker=CELERY_BROKER_URL,
@@ -42,21 +42,21 @@ celery_app = Celery(
     include=["app.tasks.scraping", "app.tasks.backup"],
 )
 
-# Настройки Celery
+# Celery settings
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
     timezone="Europe/Kiev",
     enable_utc=True,
-    worker_max_tasks_per_child=1,  # Перезапускать worker после каждой задачи для избежания утечек памяти
+    worker_max_tasks_per_child=1,  # Restart worker after each task to avoid memory leaks
 )
 
-# Парсим время из настроек
+# Parse time from settings
 scraper_hour, scraper_minute = map(int, SCRAPER_START_TIME.split(":"))
 dump_hour, dump_minute = map(int, DUMP_TIME.split(":"))
 
-# Настройка периодических задач
+# Configure periodic tasks
 celery_app.conf.beat_schedule = {
     "scrape-autoria-daily": {
         "task": "app.tasks.scraping.scrape_autoria",

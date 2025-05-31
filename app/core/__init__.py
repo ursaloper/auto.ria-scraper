@@ -1,10 +1,10 @@
 """
-Пакет core содержит базовые компоненты приложения.
+The core package contains base application components.
 
-Этот пакет включает в себя основные компоненты, необходимые для работы скрапера auto.ria.com:
-модели данных и функционал для работы с базой данных.
+This package includes the main components necessary for the auto.ria.com scraper:
+data models and functionality for working with the database.
 
-Модули:
-    models: Определение моделей данных с использованием SQLAlchemy ORM.
-    database: Функции и утилиты для работы с базой данных PostgreSQL.
+Modules:
+    models: Data model definitions using SQLAlchemy ORM.
+    database: Functions and utilities for working with PostgreSQL database.
 """

@@ -1,11 +1,11 @@
 """
-Пакет utils содержит вспомогательные утилиты.
+The utils package contains helper utilities.
 
-Этот пакет предоставляет различные вспомогательные функции и утилиты,
-которые используются в разных частях приложения. Включает в себя
-настройку логирования и инструменты для работы с базой данных.
+This package provides various helper functions and utilities
+that are used in different parts of the application. Includes
+logging setup and database tools.
 
-Модули:
-    logger: Настройка системы логирования и функция получения логгера для модуля.
-    db_dumper: Утилиты для создания и управления резервными копиями базы данных.
+Modules:
+    logger: Logging system setup and function for getting module logger.
+    db_dumper: Utilities for creating and managing database backups.
 """

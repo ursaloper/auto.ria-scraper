@@ -1,34 +1,34 @@
 # syntax=docker/dockerfile:1
 FROM python:3.10-slim
 
-# Системные зависимости и переменные среды
+# System dependencies and environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     LANG=C.UTF-8 \
     TZ=UTC \
     PYTHONPATH=/app
 
-# Установка необходимых пакетов
+# Install necessary packages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаём каталоги для хранения данных и временных файлов
+# Create directories for data storage and temporary files
 RUN mkdir -p /app/dumps /app/logs
 
 WORKDIR /app
 
-# Копируем сначала requirements.txt для лучшего кэширования слоев
+# Copy requirements.txt first for better layer caching
 COPY requirements.txt .
 
-# Установка Python зависимостей
+# Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Копируем код приложения
+# Copy application code
 COPY . .
 
-# Запуск
+# Run
 CMD ["python", "-m", "app.main"] 
